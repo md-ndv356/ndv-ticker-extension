@@ -145,123 +145,35 @@ chrome.runtime.getPlatformInfo().then(info => {
 // バージョン表示
 document.getElementById("dbTickerVersion")!.textContent = "Ticker Version: "+AppVersionCode+" ("+AppVersionView+")";
 
-type DOMGainTimerItem = {
-  target: HTMLSelectElement;
-  effective: HTMLInputElement;
-  time: HTMLInputElement;
-  gain: HTMLInputElement;
-  child: HTMLDivElement;
+const elements: any = {
+  id: new Proxy({}, { get: (_target, prop: string) => document.getElementById(prop) as any }),
+  class: new Proxy({}, { get: (_target, prop: string) => document.getElementsByClassName(prop) }),
+  name: new Proxy({}, { get: (_target, prop: string) => document.getElementsByName(prop) })
 };
-
-// main interval
-const elements = {
-  id: {
-    setIntervalNHKquake: document.getElementById("setIntervalNHKquake") as HTMLInputElement,
-    setIntervalWNImscale: document.getElementById("setIntervalWNImscale") as HTMLInputElement,
-    setIntervalWNIsorabtn: document.getElementById("setIntervalWNIsorabtn") as HTMLInputElement,
-    setIntervalWNIriver: document.getElementById("setIntervalWNIriver") as HTMLInputElement,
-    setIntervalJMAfcst: document.getElementById("setIntervalJMAfcst") as HTMLInputElement,
-    setIntervalJmaWt: document.getElementById("setIntervalJmaWt") as HTMLInputElement,
-    setIntervalWNItm: document.getElementById("setIntervalWNItm") as HTMLInputElement,
-    setIntervalTpcBlackOut: document.getElementById("setIntervalTpcBlackOut") as HTMLInputElement,
-    setIntervalIedred: document.getElementById("setIntervalIedred") as HTMLInputElement,
-    setIntervalTenkiJpTsu: document.getElementById("setIntervalTenkiJpTsu") as HTMLInputElement,
-    setIntervalWarn: document.getElementById("setIntervalWarn") as HTMLInputElement,
-    setIntervalTyphCom: document.getElementById("setIntervalTyphCom") as HTMLInputElement,
-    viewTsunamiType: document.getElementById("viewTsunamiType") as HTMLInputElement,
-    dbPfDrawing: document.getElementById("dbPfDrawing") as HTMLParagraphElement,
-    tfMonitorBase: document.getElementById("tfMonitorBase") as HTMLDivElement,
-    masterGainRange: document.getElementById("master-gain-range") as HTMLInputElement,
-    masterGainOutput: document.getElementById("master-gain-output") as HTMLSpanElement,
-    gainTimer: document.getElementById("settings-gain-timer") as HTMLUListElement,
-    gainTimers: [] as DOMGainTimerItem[],
-    scheduleAdd: document.getElementById("schedule-add") as unknown as HTMLImageElement,
-    volEEWl1: document.getElementById('volEEWl1') as HTMLInputElement,
-    volEEWl5: document.getElementById('volEEWl5') as HTMLInputElement,
-    volEEWl9: document.getElementById('volEEWl9') as HTMLInputElement,
-    volEEWh: document.getElementById('volEEWh') as HTMLInputElement,
-    volEEWc: document.getElementById('volEEWc') as HTMLInputElement,
-    volEEWp: document.getElementById('volEEWp') as HTMLInputElement,
-    volGL: document.getElementById('volGL') as HTMLInputElement,
-    volNtc: document.getElementById('volNtc') as HTMLInputElement,
-    volSpW: document.getElementById('volSpW') as HTMLInputElement,
-    volTnm: document.getElementById('volTnm') as HTMLInputElement,
-    volHvRa: document.getElementById('volHvRa') as HTMLInputElement,
-    volFldOc4: document.getElementById('volFldOc4') as HTMLInputElement,
-    volFldOc5: document.getElementById('volFldOc5') as HTMLInputElement,
-    setClipEEW: document.getElementById('setClipEEW') as HTMLInputElement,
-    wtWarnTableBody: document.getElementById('wtWarnTableBody') as HTMLTableSectionElement,
-    setParticallyReadingAme: document.getElementById("setParticallyReadingAme") as HTMLInputElement,
-    dbMemoryAvCap: document.getElementById('dbMemoryAvCap') as HTMLDivElement,
-    dbMemoryWhCap: document.getElementById('dbMemoryWhCap') as HTMLDivElement,
-    dbCpuUsages: document.getElementById('dbCpuUsages') as HTMLParagraphElement,
-    dbTickerVersion: document.getElementById("dbTickerVersion") as HTMLDivElement,
-    tsunamiList: document.getElementById("tsunamiList") as HTMLDivElement,
-    dataSaverBox: document.getElementById("dataSaverBox") as HTMLDivElement,
-    eewTime: document.getElementById("eewTime") as HTMLSpanElement,
-    speechStatusCurrent: document.getElementById("speech-status-current") as HTMLDivElement,
-    speechVolInput: document.getElementById("speech-vol-input") as HTMLInputElement,
-    speechVolView: document.getElementById("speech-vol-view") as HTMLSpanElement,
-    speechCheckboxEEW: document.getElementById("speech-checkbox-eew") as HTMLInputElement,
-    speechCheckboxQuake: document.getElementById("speech-checkbox-quake") as HTMLInputElement,
-    speechCheckboxVPOA50: document.getElementById("speech-checkbox-vpoa50") as HTMLInputElement,
-    speechCheckboxGround: document.getElementById("speech-checkbox-ground") as HTMLInputElement,
-    speechCheckboxSPwarn: document.getElementById("speech-checkbox-specialwarn") as HTMLInputElement,
-  },
-  class: {
-    tab_item: Array.from(document.getElementsByClassName("tab-item")) as HTMLDivElement[],
-    switch_button: Array.from(document.getElementsByClassName("switch-button")) as HTMLButtonElement[],
-    wtWarnListMsg: Array.from(document.getElementsByClassName("wtWarnListMsg")) as HTMLDivElement[],
-    sound_quake_volume: Array.from(document.getElementsByClassName("sound_quake_volume")) as HTMLInputElement[],
-    sound_quake_type: Array.from(document.getElementsByClassName("sound_quake_type")) as HTMLTableCellElement[],
-  },
-  name: {
-    unitTemp: [
-      document.getElementsByName('unitTemp')[0] as HTMLSelectElement
-    ],
-    unitWinds: [
-      document.getElementsByName('unitWinds')[0] as HTMLSelectElement
-    ]
-  },
-};
-const animations = {
-  switchTabs: [] as Animation[]
-};
-
-// system sounds_
 
 const Assets = {
   sound: {
     start: { _src: "../public/sound/main-started.mp3" },
     quake: {
       normal: { _src: "../public/sound/quake-notice.mp3" },
-      major: { _src: "../public/sound/quake-major.mp3" },
-    },
-    warning: {
-      Notice: { _src: "../public/sound/warn-tornado.mp3" },
-      GroundLoosening: { _src: "../public/sound/warn-ground.mp3" },
-      Emergency: { _src: "../public/sound/warn-emergency.mp3" },
-      HeavyRain: { _src: "../public/sound/warn-heavyrain.mp3" },
-      Flood5: { _src: "../public/sound/warn-flood5.mp3" },
-      Flood4: { _src: "../public/sound/warn-flood4.mp3" },
+      major: { _src: "../public/sound/quake-major.mp3" }
     },
     tsunami: {
-      notice: { _src: "../public/sound/tsunami-0.mp3" },
-      watch: { _src: "../public/sound/tsunami-1.mp3" },
-      warning: { _src: "../public/sound/tsunami-2.mp3" },
       majorwarning: { _src: "../public/sound/tsunami-3.mp3" },
-      obs: { _src: "../public/sound/tsunami-obs.mp3" },
+      obs: { _src: "../public/sound/tsunami-obs.mp3" }
     },
     eew: {
       plum: { _src: "../public/sound/eew-plum.mp3" },
       first: { _src: "../public/sound/eew-first.mp3" },
       continue: { _src: "../public/sound/eew-continue.mp3" },
       last: { _src: "../public/sound/eew-last.mp3" },
-      custom: { _src: "../public/sound/eew-custom.mp3" },
-    }
+      custom: { _src: "../public/sound/eew-custom.mp3" }
+    },
+    warning: {}
   }
 };
 const sounds = Assets.sound;
+const animations: any = { switchTabs: [] as any[] };
 
 // Stream Recorder （2024/07/19 削除）
 
@@ -485,7 +397,7 @@ var textSpeed = 5,
       { title: directTexts[8], message: directTexts[3] },
       { title: directTexts[9], message: directTexts[4] }
     ],
-    commandShortcuts = {},
+    commandShortcuts: Record<number, string> = {},
     textCmdIds = [1,2,11,13,20],
     textCount = 5,
     viewingTextIndex = 0,
@@ -526,12 +438,12 @@ var earthquakes_log = {};
 var eewEpicenter = '',
     eewOriginTime = new Date("2000/01/01 00:00:00"),
     eewCalcintensity = '',
-    eewCalcIntensityIndex = '',
+    eewCalcIntensityIndex = 0,
     eewDepth = '',
   _eewAlertFlgText = '',
   _eewCancelText = '',
-    eewMagnitude = '',
-    eewReportNumber = '',
+    eewMagnitude = 0,
+    eewReportNumber: string | number = '',
     eewReportID = '',
     eewIsFinal = true,
   _eewIsTraning = false,
@@ -862,14 +774,6 @@ const textureFonts = images.texture as Record<string, any>;
 ]);
 
 // https://i.stack.imgur.com/6yhO4.png
-interface DrawTextureTextOptions {
-  base: string;
-  px: number;
-  weight?: string;
-  color?: string;
-  letterSpacing?: number;
-}
-
 interface TextureFontMetrics {
   width: number;
   actualBoundingBoxLeft: number;
@@ -901,7 +805,7 @@ interface TextureFontSizeEntry {
 
 type TextureFontsRecord = Record<string, Record<string, Record<number, TextureFontSizeEntry>>>;
 
-const DrawTextureText = (text: string, x: number, y: number, option: DrawTextureTextOptions, maxWidth: number) => {
+const DrawTextureText = (text: string, x: number, y: number, option: any, maxWidth?: number) => {
   text = text+"";
   if(!option.color) option.color = (context.fillStyle as string).slice(1);
   let target = (images.texture as unknown as TextureFontsRecord)[option.base][option.weight?option.weight:"none"][option.px];
@@ -951,6 +855,12 @@ const DrawTextureText = (text: string, x: number, y: number, option: DrawTexture
 declare global {
   interface HTMLImageElement {
     toImageData(): ImageData;
+  }
+  interface Number {
+    byteToString(): string;
+  }
+  interface BigInt {
+    byteToString(): string;
   }
 }
 
@@ -1286,6 +1196,8 @@ function arrayCombining(array: any){
     }
   }
 }
+void toRad;
+void ExRandom;
 
 const speechBase = new AudioSpeechController();
 
@@ -1456,20 +1368,25 @@ function ExRandom(min: any, max: any){
   return Math.floor( Math.random() * (max + 1 - min) ) + min ;
 }
 function BNref(){
+  const title = (document.getElementById('BNtitle') as HTMLInputElement | null)?.value ?? "";
+  const text1 = (document.getElementById('BNtext1') as HTMLInputElement | null)?.value ?? "";
+  const text2 = (document.getElementById('BNtext2') as HTMLInputElement | null)?.value ?? "";
   NewsOperator.clearAll();
   NewsOperator.add(
-    document.getElementById('BNtitle').value,
-    document.getElementById('BNtext1').value,
-    document.getElementById('BNtext2').value
+    title,
+    text1,
+    text2
   );
   textOffsetX = 0;
 }
 
 var keyWord = "";
 var quake = {reportId:"",year:"",month:"",date:"",hour:"",minute:"",second:"",longitude:"",latitude:"",depth:"",magnitude:"",isAlert:false,epicenter:""};
+void keyWord;
+void quake;
 
 document.onkeydown = keydown;
-function keydown(event){
+function keydown(event: KeyboardEvent){
   if (heightBeforeFull && document.body.classList.contains("fullview") && (event.code === "KeyQ" || event.code === "Escape")){
     document.getElementsByClassName("canvas-container")[0].classList.remove("fullview");
     document.body.classList.remove("fullview");
@@ -1486,12 +1403,13 @@ function viewWeatherWarningList(){
   });
 }
 
-const SetMode = int => {
+const SetMode = (int: number) => {
   // const lastInt = viewMode;
   viewMode = int;
   if (int !== 1){
-    if (audioAPI.oscillatorNode.starting) audioAPI.fun.stopOscillator();
-    speechBase.userSpace.isEewMode = false;
+    if (audioAPI.oscillatorNode?.starting) audioAPI.fun.stopOscillator();
+    const userSpace = speechBase.userSpace as any;
+    if (userSpace) userSpace.isEewMode = false;
   }
   if (int === 0){
     if (NewsOperator.endTime){
@@ -1543,7 +1461,7 @@ Object.defineProperty(Number.prototype, "byteToString", {
   writable: false,
   value: function(){
     const byte = BigInt(this);
-    const table = [
+    const table: Array<[bigint, bigint, string]> = [
       [1n, 1n, "B"],
       [1024n, 1024n, "KiB"],
       [1048576n, 1024n, "MiB"],
@@ -1553,7 +1471,7 @@ Object.defineProperty(Number.prototype, "byteToString", {
       [1152921504606846976n, 1024n, "EiB"],
       [1180591620717411303424n, 1024n, "ZiB"],
       [1208925819614629174706176n, 1024n, "YiB"],
-      [1237940039285380274899124224, 0n]
+      [1237940039285380274899124224n, 0n, "YiB+"]
     ];
     let out = "";
     for (const item of table){
@@ -1568,9 +1486,13 @@ Object.defineProperty(Number.prototype, "byteToString", {
 });
 BigInt.prototype.byteToString = Number.prototype.byteToString;
 
+const safeGetFormattedDate = (...args: any[]) => (getFormattedDate as any)(...args);
+const safeRainWindData = (...args: any[]) => (rain_windData as any)(...args);
+const safeHumanReadable = (...args: any[]) => (humanReadable as any)(...args);
+
 const Routines = {
   memory: {
-    lastTime: ""
+    lastTime: 0
   },
   previousCPU: undefined,
   isDrawNormalTitle: true,
@@ -1580,7 +1502,7 @@ const Routines = {
     time.font = "bold 50px '7barSP'";
     return Routines.isClockFontLoaded = (time.measureText("0123456789").width === 250);
   },
-  subCanvasTime: function drawClock(targetTime){
+  subCanvasTime: function drawClock(targetTime: Date){
     const timeString1=(" "+targetTime.getHours()+":"+("0" + targetTime.getMinutes()).slice(-2)).slice(-5);
     const timeString2=("0"+(targetTime.getFullYear()-2000)).slice(-2)+"-"+("0"+(targetTime.getMonth()+1)).slice(-2)+"-"+("0" + targetTime.getDate()).slice(-2);
     time.fillStyle = colorScheme[colorThemeMode][6][0];
@@ -1631,18 +1553,20 @@ const Routines = {
     //背景(White)
     // const currentTime = Date.now();
 
-    if (viewMode !== 1) drawRect(0, 60, 1080, 68, colorScheme[colorThemeMode][5][0]);
+    const barColor = colorScheme[colorThemeMode][5][0] as string;
+    if (viewMode !== 1) drawRect(0, 60, 1080, 68, barColor);
     context.font = '300 40px ' + FontFamilies.sans;
     //context.font = '40px Arial, "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, メイリオ, Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif';
     //context.font = '40px "游ゴシック Medium","Yu Gothic Medium","游ゴシック体",YuGothic,sans-serif';
     //context.font = '40px "Hiragino Sans W3", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "メイリオ", Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif';
     // let performDrawStartAt = performance.now() * 1000;
     const targetTime = getAdjustedDate();
-    const targetTimeInt = targetTime - 0;
+    const targetTimeInt = targetTime.valueOf();
     // 津波予報の失効時刻になったら・・・
-    if (DataOperator.tsunami.isIssued && DataOperator.tsunami.expire <= targetTime){
+    const tsunamiExpire = Number((DataOperator.tsunami as any).expire);
+    if (DataOperator.tsunami.isIssued && tsunamiExpire <= targetTimeInt){
       DataOperator.tsunami.isIssued = false;
-      DataOperator.tsunami.onUpdate(); // isIssued = false なので引数なくてもok
+      (DataOperator.tsunami as any).onUpdate?.(undefined); // isIssued = false なので引数なくてもok
     }
 
     if (viewMode !== 3) textOffsetX -= textSpeed;
@@ -1654,17 +1578,18 @@ const Routines = {
     if ((q_startTime % Math.floor(elements.id.setIntervalWNIsorabtn.valueAsNumber/20)) === 1) sorabtn();
     if ((q_startTime % Math.floor(elements.id.setIntervalWNIriver.valueAsNumber/20)) === 1) XHRs.river.load();
     if ((q_startTime % Math.floor(elements.id.setIntervalJMAfcst.valueAsNumber/20)) === 1) XHRs.getJMAforecast.load();
-    if (q_startTime==4 || ((getFormattedDate(1).minute % 10)==0&&getFormattedDate(1).second==30&&t==0)) rain_windData((q_startTime===4)||(getFormattedDate(1).minute==0)),t=1;
-    if (getFormattedDate(1).second === 50) t=0;
+    const formattedNow = safeGetFormattedDate(1);
+    if (q_startTime==4 || (((formattedNow?.minute ?? 0) % 10)==0 && (formattedNow?.second ?? 0)==30 && t==0)) safeRainWindData((q_startTime===4)||((formattedNow?.minute ?? 0)==0)),t=1;
+    const formattedNowSecond = safeGetFormattedDate(1)?.second ?? 0;
+    if (formattedNowSecond === 50) t=0;
     if ((q_startTime % Math.floor(elements.id.setIntervalJmaWt.valueAsNumber/20)) === 1) weatherInfo();
-    if ((q_startTime % Math.floor(200)) == 1) humanReadable();
+    if ((q_startTime % Math.floor(200)) == 1) safeHumanReadable();
     if ((q_startTime % 9000) === 1) getAmedasData();
     if ((q_startTime % 3000) === 1) getEvacuationData();
     if ((q_startTime % 225) === 1){
       const didLoop = advanceTsunamiPage(tsunamiOverlayState);
       if (didLoop) Routines.isDrawNormalTitle = true;
     }
-    const isMscale2 = mscale === 1 && colorThemeMode != 2;
     //if((startTime%50) == 1)jma_earthquake();
     //if((startTime%500) == 1){
       //if(document.getElementById("isNormalMes").checked)loadDText();
@@ -1706,6 +1631,7 @@ const Routines = {
       directTexts[viewingTextIndex] = DataOperator.tsunami.text.whole;
     }
     syncNormalItemsFromDirectTexts();
+    const normalTextEls = document.getElementsByClassName("normal-text") as HTMLCollectionOf<HTMLElement>;
     const textWidth = viewMode === 0
       ? -strWidth(normalItems[viewingTextIndex]?.message ?? directTexts[viewingTextIndex] ?? "") - 200
       : -strWidth(quakeText[q_currentShindo]);
@@ -1717,13 +1643,13 @@ const Routines = {
       textOffsetX = 1200;
       q_currentShindo--;
       Routines.isDrawNormalTitle = true;
-      document.getElementsByClassName("normal-text")[viewingTextIndex].style.background = "#ffffff";
+      normalTextEls[viewingTextIndex]?.style && (normalTextEls[viewingTextIndex].style.background = "#ffffff");
       /* if (!document.getElementsByName("scrollfix")[viewingTextIndex].checked) */ viewingTextIndex++;
       if (viewingTextIndex == 5) viewingTextIndex = 0;
       for (let i=q_currentShindo; i>-1; i--){
         if (quakeText[i] != ""){ q_currentShindo = i; break; }
       }
-      document.getElementsByClassName("normal-text")[viewingTextIndex].style.background = "#ffff60";
+      normalTextEls[viewingTextIndex]?.style && (normalTextEls[viewingTextIndex].style.background = "#ffff60");
     }
     if (q_currentShindo < 0){
       q_currentShindo = q_maxShindo;
@@ -1802,8 +1728,8 @@ const Routines = {
             colorScheme,
             colorThemeMode,
             fontSans: FontFamilies.sans,
-            drawTextureImage: ctx.drawTextureImage,
-            DrawTextureText,
+            drawTextureImage: ctx.drawTextureImage as any,
+            DrawTextureText: DrawTextureText as any,
             eewMapBmp,
             eewIsAlert,
             eewIsAssumption,
@@ -1969,7 +1895,7 @@ const Routines = {
     }
 
     // 分更新動作
-    const currentTimeDate = Math.floor(targetTime / 60000);
+    const currentTimeDate = Math.floor(targetTime.valueOf() / 60000);
     if (Routines.judgeIsClockFontLoaded()){
       if (currentTimeDate != Routines.memory.lastTime){
         Routines.subCanvasTime(targetTime);
@@ -1988,7 +1914,8 @@ const Routines = {
         if (!task.effective) continue;
         if (!(task.time.h === targetTime.getHours() && task.time.m === targetTime.getMinutes())) continue;
         if (task.target === "master"){
-          audioAPI.masterGainValue = elements.id.masterGainRange.value = task.gain / 100;
+          audioAPI.masterGainValue = task.gain / 100;
+          elements.id.masterGainRange.value = String(task.gain / 100);
         } else if(task.target === "speech"){
           speechBase.volume = task.gain / 100;
         }
@@ -2005,15 +1932,16 @@ const Routines = {
 
     // AudioAPI alarm adjustment
     if (q_startTime % 8 === 0){
-      audioAPI.fun["freq"+(q_startTime%16>7?"B5":"E6")]();
+      const freqKey = "freq" + (q_startTime%16>7?"B5":"E6");
+      (audioAPI.fun as any)[freqKey]?.();
     }
 
     //audio repeatition control
-    const bgmElements = document.getElementsByClassName('BGM');
-    const bgmRepeatingStartMin = document.getElementsByClassName('BGMrepeatingStartMin');
-    const bgmRepeatingStopMin = document.getElementsByClassName('BGMrepeatingStopMin');
-    const bgmRepeatingStartSec = document.getElementsByClassName('BGMrepeatingStartSec');
-    const bgmRepeatingStopSec = document.getElementsByClassName('BGMrepeatingStopSec');
+    const bgmElements = document.getElementsByClassName('BGM') as HTMLCollectionOf<HTMLAudioElement>;
+    const bgmRepeatingStartMin = document.getElementsByClassName('BGMrepeatingStartMin') as HTMLCollectionOf<HTMLInputElement>;
+    const bgmRepeatingStopMin = document.getElementsByClassName('BGMrepeatingStopMin') as HTMLCollectionOf<HTMLInputElement>;
+    const bgmRepeatingStartSec = document.getElementsByClassName('BGMrepeatingStartSec') as HTMLCollectionOf<HTMLInputElement>;
+    const bgmRepeatingStopSec = document.getElementsByClassName('BGMrepeatingStopSec') as HTMLCollectionOf<HTMLInputElement>;
     for (let i=0; i<bgmElements.length; i++){
       if (Number(bgmRepeatingStopMin[i].value) * 60 + Number(bgmRepeatingStopSec[i].value) < bgmElements[i].currentTime && bgmElements[i].checked){
         bgmElements[i].currentTime = Number(bgmRepeatingStartMin[i].value) * 60 + Number(bgmRepeatingStartSec[i].value);
@@ -2080,7 +2008,9 @@ function audiodebug_interval(index = 0){
     "AudioDebug: Index 0: currentTime[  0.53] / startedAt[117.06] / playing[  0.00] / pausedAt[ 24.43] / loop[true,  51.12~ 76.74]";
   }
 }
+void audiodebug_interval;
 var timer;
+void timer;
 
 // check the Earthquake Early Warning
 var isEEW = false,
@@ -2093,12 +2023,16 @@ var isEEW = false,
       logs: []
     },
     eewAssumptionsLog = {};
+void isEEW;
+void lastAt;
+void lastOriginalText;
+void eewAssumptionsLog;
 
 let eewOffset = NaN;
 async function eewCalcOffset_c1(){
   if (isNaN(eewOffset)){
-    return await fetch("https://smi.lmoniexp.bosai.go.jp/webservice/server/pros/latest.json?_="+(new Date()-0)).then(res => res.json()).then(data => {
-      return eewOffset = new Date(data.latest_time) - new Date(data.request_time);
+    return await fetch("https://smi.lmoniexp.bosai.go.jp/webservice/server/pros/latest.json?_="+Date.now()).then(res => res.json()).then(data => {
+      return eewOffset = Number(new Date(data.latest_time)) - Number(new Date(data.request_time));
     });
   } else return eewOffset;
 }
@@ -2107,7 +2041,7 @@ function eewChecking_c1(){
     const eewTime = new Date();
     eewTime.setMilliseconds(eewTime.getMilliseconds() + offsetTime);
     elements.id.eewTime.textContent = ("0" + eewTime.getHours()).slice(-2) + ":" + ("0" + eewTime.getMinutes()).slice(-2) + ":" + ("0" + eewTime.getSeconds()).slice(-2);
-    const eewStr = getFormattedDate(0, true, eewTime);
+    const eewStr = safeGetFormattedDate(0, true, eewTime);
     return fetch(RequestURL.lmoni_eew.replace("{yyyyMMddHHmmss}", eewStr));
   }).then(res => res.json()).then(data => {
 
@@ -2116,13 +2050,14 @@ function eewChecking_c1(){
       eewClassCode = 37;
       eewReportNumber = data.report_num;
       eewEpicenter = data.region_name;
-      eewEpicenterID = AreaEpicenter2Code[eewEpicenter] ?? "";
+      const areaEpicenterMap = AreaEpicenter2Code as Record<string, string>;
+      eewEpicenterID = areaEpicenterMap[eewEpicenter] ?? "";
       eewIsCancel = data.is_cancel;
       eewIsFinal = data.is_final;
       _eewIsTraning = data.is_traning;
       eewCalcIntensityIndex = ["不明", "1", "2", "3", "4", "5弱", "5強", "6弱", "6強", "7"].indexOf(data.calcintensity);
       eewCalcintensity = data.calcintensity;
-      eewMagnitude = data.magunitude - 0;
+      eewMagnitude = Number(data.magunitude);
       eewDepth = data.depth.slice(0, -2);
       if (eewReportID !== data.report_id) eewIsAlert = false;
       eewReportID = data.report_id;
@@ -2139,13 +2074,13 @@ function eewChecking_c1(){
           SFXController.play(sounds.eew.continue);
         }
         if (eewIsAlert_changed){
-          if (!audioAPI.oscillatorNode.starting) audioAPI.fun.startOscillator();
+          if (!audioAPI.oscillatorNode?.starting) audioAPI.fun.startOscillator();
         }
         if (!eewIsAlert){
-          if (audioAPI.oscillatorNode.starting) audioAPI.fun.stopOscillator();
+          if (audioAPI.oscillatorNode?.starting) audioAPI.fun.stopOscillator();
         }
-        const isForcedTime = eewOriginTime.getTime()+90000 > getFormattedDate(2);
-        if (isForcedTime || eewReportNumber < 13){
+        const isForcedTime = eewOriginTime.getTime()+90000 > (safeGetFormattedDate(2) as any);
+        if (isForcedTime || Number(eewReportNumber) < 13){
           SetMode(1);
         }
         eewMapDraw(data.longitude-0, data.latitude-0);
@@ -2170,38 +2105,38 @@ eewChecking_c1.tracker = new TrafficTracker("lmoni EEW");
  * @param {Boolean} speechShindo 震度を読み上げるか
  * @param {Boolean} speechMag マグニチュードを読み上げるか
  */
-function eewSpeech(quakeId, maxShindo, epicenterId, magnitude, depth, speechShindo = true, speechMag = true){
-  // console.log(Array.from(arguments));
-  if (!speechBase.userSpace.isEewMode) speechBase.allCancel();
-  speechBase.userSpace.isEewMode = true;
-  speechBase.setId("eew.epicenter_long", { type: "path", speakerId: speechBase.userSpace.speakerId, path: "eew.epicenter.long." + epicenterId });
-  if (speechShindo) speechBase.setId("eew.max_shindo", { type: "path", speakerId: speechBase.userSpace.speakerId, path: "common.intensity." + maxShindo });
-  if (speechMag) speechBase.setId("eew.magnitude_val", { type: "path", speakerId: speechBase.userSpace.speakerId, path: "common.magnitude." + ("0" + (magnitude * 10).toFixed()).slice(-2) });
-  if (speechBase.userSpace.eew.quakeId !== quakeId){
-    speechBase.userSpace.eew.quakeId = "";
-    speechBase.userSpace.eew.intensity = "";
-    speechBase.userSpace.eew.epicenterId = "";
-    speechBase.userSpace.eew.magnitude = "";
-    speechBase.userSpace.eew.depth = "";
+function eewSpeech(quakeId: string, maxShindo: number, epicenterId: string, magnitude: number, depth: string, speechShindo = true, speechMag = true){
+  const speechUser = speechBase.userSpace as any;
+  if (!speechUser.isEewMode) speechBase.allCancel();
+  speechUser.isEewMode = true;
+  speechBase.setId("eew.epicenter_long", { type: "path", speakerId: speechUser.speakerId, path: "eew.epicenter.long." + epicenterId });
+  if (speechShindo) speechBase.setId("eew.max_shindo", { type: "path", speakerId: speechUser.speakerId, path: "common.intensity." + maxShindo });
+  if (speechMag) speechBase.setId("eew.magnitude_val", { type: "path", speakerId: speechUser.speakerId, path: "common.magnitude." + ("0" + (magnitude * 10).toFixed()).slice(-2) });
+  if (speechUser.eew.quakeId !== quakeId){
+    speechUser.eew.quakeId = "";
+    speechUser.eew.intensity = "";
+    speechUser.eew.epicenterId = "";
+    speechUser.eew.magnitude = "";
+    speechUser.eew.depth = "";
   }
-  if (speechBase.paused && (speechBase.userSpace.eew.epicenterId !== epicenterId || speechBase.userSpace.eew.intensity !== maxShindo || speechBase.userSpace.eew.magnitude !== magnitude)){
+  if (speechBase.paused && (speechUser.eew.epicenterId !== epicenterId || speechUser.eew.intensity !== maxShindo || speechUser.eew.magnitude !== magnitude)){
     if (elements.id.speechCheckboxEEW.checked) speechBase.start([
-      ...(speechBase.userSpace.eew.epicenterId !== epicenterId ? [{ type: "id", id: "eew.epicenter_long" }] : []),
-      ...(speechShindo ? [{ type: "path", speakerId: speechBase.userSpace.speakerId, path: "eew.ungrouped.3" },
+      ...(speechUser.eew.epicenterId !== epicenterId ? [{ type: "id", id: "eew.epicenter_long" }] : []),
+      ...(speechShindo ? [{ type: "path", speakerId: speechUser.speakerId, path: "eew.ungrouped.3" },
       { type: "id", id: "eew.max_shindo" }] : []),
-      ...(speechMag ? [{ type: "path", speakerId: speechBase.userSpace.speakerId, path: "eew.ungrouped.4" },
+      ...(speechMag ? [{ type: "path", speakerId: speechUser.speakerId, path: "eew.ungrouped.4" },
       { type: "id", id: "eew.magnitude_val" }] : [])
     ]);
-    speechBase.userSpace.eew.quakeId = quakeId;
-    speechBase.userSpace.eew.intensity = maxShindo;
-    speechBase.userSpace.eew.epicenterId = epicenterId;
-    speechBase.userSpace.eew.magnitude = magnitude;
-    speechBase.userSpace.eew.depth = depth;
+    speechUser.eew.quakeId = quakeId;
+    speechUser.eew.intensity = maxShindo;
+    speechUser.eew.epicenterId = epicenterId;
+    speechUser.eew.magnitude = magnitude;
+    speechUser.eew.depth = depth;
   };
 }
 
 // Earthquake Early Warning
-var eewMapBmp = null;
+var eewMapBmp: ImageBitmap | null = null;
 createImageBitmap(context.createImageData(175, 128)).then(bmp => eewMapBmp = bmp);
 var eewEpiPos = [992,63];
 /**
