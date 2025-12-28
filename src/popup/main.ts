@@ -145,6 +145,14 @@ chrome.runtime.getPlatformInfo().then(info => {
 // バージョン表示
 document.getElementById("dbTickerVersion")!.textContent = "Ticker Version: "+AppVersionCode+" ("+AppVersionView+")";
 
+type DOMGainTimerItem = {
+  target: HTMLSelectElement;
+  effective: HTMLInputElement;
+  time: HTMLInputElement;
+  gain: HTMLInputElement;
+  child: HTMLDivElement;
+};
+
 const elements = {
   id: {
     setIntervalNHKquake: document.getElementById("setIntervalNHKquake") as HTMLInputElement,
@@ -216,7 +224,48 @@ const elements = {
   },
 };
 
-const Assets = {
+type UUIDAudioBufferSourceNode = AudioBufferSourceNode & { uuid?: string };
+type SoundLeaf = {
+  _src: string;
+  _defaultGain?: number;
+  audioData?: AudioBuffer;
+  buffer?: UUIDAudioBufferSourceNode;
+  gain?: GainNode;
+  audioEndedEvent?: (this: SoundLeaf) => void;
+  canPlay?: boolean;
+};
+type SoundTree = { [key: string]: SoundLeaf | SoundTree };
+type Sounds = {
+  start: SoundLeaf;
+  quake: {
+    normal: SoundLeaf;
+    major: SoundLeaf;
+  };
+  warning: {
+    Notice: SoundLeaf;
+    GroundLoosening: SoundLeaf;
+    Emergency: SoundLeaf;
+    HeavyRain: SoundLeaf;
+    Flood5: SoundLeaf;
+    Flood4: SoundLeaf;
+  };
+  tsunami: {
+    notice: SoundLeaf;
+    watch: SoundLeaf;
+    warning: SoundLeaf;
+    majorwarning: SoundLeaf;
+    obs: SoundLeaf;
+  };
+  eew: {
+    plum: SoundLeaf;
+    first: SoundLeaf;
+    continue: SoundLeaf;
+    last: SoundLeaf;
+    custom: SoundLeaf;
+  };
+};
+
+const Assets: { sound: Sounds } = {
   sound: {
     start: { _src: "../public/sound/main-started.mp3" },
     quake: {
@@ -247,7 +296,7 @@ const Assets = {
     }
   }
 };
-const sounds = Assets.sound;
+const sounds = Assets.sound as Sounds;
 const animations: any = { switchTabs: [] as any[] };
 
 // Stream Recorder （2024/07/19 削除）
@@ -272,148 +321,146 @@ interface GainProgram {
 }
 
 // initialize Web Audio API
-const audioAPI = {
-  context: new AudioContext(),
-  masterGain: null as GainNode | null,
-  gainNode: null as GainNode | null,
-  oscillatorNode: null as CustomOscillatorNode | null,
-  init: function(){
-    // マスター音量
-    audioAPI.masterGain = audioAPI.context.createGain();
-    audioAPI.masterGain.gain.value = 1;
-    audioAPI.masterGain.connect(audioAPI.context.destination);
-    // Oscillatorのための準備
-    audioAPI.gainNode = audioAPI.context.createGain();
-    audioAPI.gainNode.gain.value = 0.1;
-    audioAPI.oscillatorNode = null;
-    audioAPI.gainNode.connect(audioAPI.masterGain);
-  },
-  fun: {
-    setOscillator: function(){
-      audioAPI.oscillatorNode = new CustomOscillatorNode(audioAPI.context);
-      audioAPI.oscillatorNode.connect(audioAPI.gainNode!);
-      audioAPI.oscillatorNode.frequency.value = 1000; // 987.767 - 1318.510
-      audioAPI.oscillatorNode.type = "sine";
-      audioAPI.oscillatorNode.addEventListener("ended", function(){
-        const freq = audioAPI.oscillatorNode!.frequency.value;
-        audioAPI.oscillatorNode!.disconnect(audioAPI.gainNode!);
-        audioAPI.fun.setOscillator();
-        audioAPI.oscillatorNode!.frequency.value = freq;
-      });
-      audioAPI.oscillatorNode!.starting = false;
+const audioAPI = (() => {
+  const context = new AudioContext();
+  const masterGain = context.createGain();
+  masterGain.gain.value = 1;
+  masterGain.connect(context.destination);
+  const gainNode = context.createGain();
+  gainNode.gain.value = 0.1;
+  gainNode.connect(masterGain);
+
+  const oscillatorNode = new CustomOscillatorNode(context);
+
+  return {
+    context,
+    masterGain: masterGain as GainNode,
+    gainNode: gainNode as GainNode,
+    oscillatorNode: oscillatorNode as CustomOscillatorNode,
+    fun: {
+      resetOscillator: function(){
+        audioAPI.oscillatorNode = new CustomOscillatorNode(audioAPI.context);
+        audioAPI.oscillatorNode.connect(audioAPI.gainNode);
+        audioAPI.oscillatorNode.frequency.value = 1000; // 987.767 - 1318.510
+        audioAPI.oscillatorNode.type = "sine";
+        audioAPI.oscillatorNode.addEventListener("ended", function(){
+          const freq = audioAPI.oscillatorNode.frequency.value;
+          audioAPI.oscillatorNode.disconnect(audioAPI.gainNode);
+          audioAPI.fun.resetOscillator();
+          audioAPI.oscillatorNode.frequency.value = freq;
+        });
+        audioAPI.oscillatorNode.starting = false;
+      },
+      startOscillator: function(){
+        audioAPI.oscillatorNode.starting = true;
+        audioAPI.oscillatorNode.start();
+      },
+      stopOscillator: function(time = 0){
+        audioAPI.oscillatorNode.starting = false;
+        try { audioAPI.oscillatorNode.stop(audioAPI.context.currentTime + time); } catch {}
+      },
+      freqB5: function(){audioAPI.oscillatorNode.frequency.value = 987.767;},
+      freqE6: function(){audioAPI.oscillatorNode.frequency.value = 1318.51;},
+      freqTS: function(){audioAPI.oscillatorNode.frequency.value = 1000;}
     },
-    startOscillator: function(){
-      audioAPI.oscillatorNode!.starting = true;
-      audioAPI.oscillatorNode!.start();
+    gainTimer: [] as GainProgram[],
+    getGainTimer (){
+      this.gainTimer = [];
+      for (const item of elements.id.gainTimers){
+        const time = item.time.valueAsDate;
+        if (!time) continue;
+        this.gainTimer.push({
+          effective: item.effective.checked,
+          target: item.target.value as "master" | "speech",
+          time: { h: time.getUTCHours(), m: time.getUTCMinutes() },
+          gain: item.gain.valueAsNumber
+        });
+      }
     },
-    stopOscillator: function(time = 0){
-      audioAPI.oscillatorNode!.starting = false;
-      try { audioAPI.oscillatorNode!.stop(audioAPI.context.currentTime + time); } catch {}
+    setGainTimer (programs: GainProgram[]){
+      for (const item of programs){
+        this.addGainTimer(item.effective, (("0" + item.time.h).slice(-2) + ":" + ("0" + item.time.m).slice(-2)), item.gain + "", item.target);
+      }
+      this.getGainTimer();
     },
-    freqB5: function(){audioAPI.oscillatorNode!.frequency.value = 987.767;},
-    freqE6: function(){audioAPI.oscillatorNode!.frequency.value = 1318.51;},
-    freqTS: function(){audioAPI.oscillatorNode!.frequency.value = 1000;}
-  },
-  gainTimer: [] as GainProgram[],
-  getGainTimer (){
-    this.gainTimer = [];
-    for (const item of elements.id.gainTimers){
-      const time = item.time.valueAsDate;
-      if (!time) continue;
-      this.gainTimer.push({
-        effective: item.effective.checked,
-        target: item.target.value as "master" | "speech",
-        time: { h: time.getUTCHours(), m: time.getUTCMinutes() },
-        gain: item.gain.valueAsNumber
+    addGainTimer (valEffective = false, valTime = "", valGain = "", valTarget = "master"){
+      if (typeof valEffective !== "boolean") valEffective = false;
+      const child = document.createElement("div");
+      const label = document.createElement("label");
+      const span1 = document.createElement("span");
+      const span2 = document.createElement("span");
+      const span3 = document.createElement("span");
+      const span4 = document.createElement("span");
+      const effective = document.createElement("input");
+      const time = document.createElement("input");
+      const gain = document.createElement("input");
+      const target = document.createElement("select");
+      target.add(new Option("マスター音量", "master", true));
+      target.add(new Option("読み上げ音量", "speech"));
+      const button = document.createElement("button");
+      const removeImg = document.createElement("img");
+      removeImg.src = "/src/public/image/remove.svg";
+      span1.textContent = " - ";
+      span2.textContent = "に";
+      span3.textContent = "を";
+      span4.textContent = "%へ設定";
+      effective.type = "checkbox";
+      effective.checked = valEffective;
+      time.type = "time";
+      time.value = valTime;
+      gain.type = "number";
+      gain.value = "100";
+      gain.min = "0";
+      gain.max = "100";
+      gain.value = valGain;
+      target.value = valTarget;
+      button.classList.add("timer-remove-icon");
+      label.append(effective, span1, time, span2, target, span3, gain, span4);
+      button.appendChild(removeImg);
+      child.append(label, button);
+      elements.id.gainTimer.appendChild(child);
+      removeImg.dataset.index = elements.id.gainTimers.length + "";
+      elements.id.gainTimers.push({ target, effective, time, gain, child });
+      removeImg.addEventListener("click", event => {
+        const index = Number((event.currentTarget as HTMLElement).dataset.index);
+        if (!Number.isFinite(index)) return;
+
+        const target = elements.id.gainTimers[index];
+        if (!target) return;
+
+        if (!confirm("この時刻指定を削除しますか？")) return;
+        elements.id.gainTimers.splice(index, 1);
+        target.child.remove();
+
+        // Re-number indices after removal
+        elements.id.gainTimers.forEach((t, i) => {
+          const img = t.child.querySelector("img");
+          if (img) img.dataset.index = String(i);
+        });
+
+        audioAPI.getGainTimer();
       });
+      for (const item of elements.id.gainTimers){
+        item.target.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
+        item.effective.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
+        item.time.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
+        item.gain.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
+      }
+      return elements.id.gainTimers[elements.id.gainTimers.length - 1];
+    },
+    get masterGainValue (): number | null {
+      return audioAPI.masterGain.gain.value;
+    },
+    set masterGainValue (value: number){
+      elements.id.masterGainOutput.textContent = Math.floor((audioAPI.masterGain.gain.value = value) * 100) + "%"
     }
-  },
-  setGainTimer (programs: GainProgram[]){
-    for (const item of programs){
-      this.addGainTimer(item.effective, (("0" + item.time.h).slice(-2) + ":" + ("0" + item.time.m).slice(-2)), item.gain + "", item.target);
-    }
-    this.getGainTimer();
-  },
-  addGainTimer (valEffective = false, valTime = "", valGain = "", valTarget = "master"){
-    if (typeof valEffective !== "boolean") valEffective = false;
-    const child = document.createElement("div");
-    const label = document.createElement("label");
-    const span1 = document.createElement("span");
-    const span2 = document.createElement("span");
-    const span3 = document.createElement("span");
-    const span4 = document.createElement("span");
-    const effective = document.createElement("input");
-    const time = document.createElement("input");
-    const gain = document.createElement("input");
-    const target = document.createElement("select");
-    target.add(new Option("マスター音量", "master", true));
-    target.add(new Option("読み上げ音量", "speech"));
-    const button = document.createElement("button");
-    const removeImg = document.createElement("img");
-    removeImg.src = "/src/public/image/remove.svg";
-    span1.textContent = " - ";
-    span2.textContent = "に";
-    span3.textContent = "を";
-    span4.textContent = "%へ設定";
-    effective.type = "checkbox";
-    effective.checked = valEffective;
-    time.type = "time";
-    time.value = valTime;
-    gain.type = "number";
-    gain.value = "100";
-    gain.min = "0";
-    gain.max = "100";
-    gain.value = valGain;
-    target.value = valTarget;
-    button.classList.add("timer-remove-icon");
-    label.append(effective, span1, time, span2, target, span3, gain, span4);
-    button.appendChild(removeImg);
-    child.append(label, button);
-    elements.id.gainTimer.appendChild(child);
-    removeImg.dataset.index = elements.id.gainTimers.length + "";
-    elements.id.gainTimers.push({ target, effective, time, gain, child });
-    removeImg.addEventListener("click", event => {
-      const index = Number((event.currentTarget as HTMLElement).dataset.index);
-      if (!Number.isFinite(index)) return;
-
-      const target = elements.id.gainTimers[index];
-      if (!target) return;
-
-      if (!confirm("この時刻指定を削除しますか？")) return;
-      elements.id.gainTimers.splice(index, 1);
-      target.child.remove();
-
-      // Re-number indices after removal
-      elements.id.gainTimers.forEach((t, i) => {
-        const img = t.child.querySelector("img");
-        if (img) img.dataset.index = String(i);
-      });
-
-      audioAPI.getGainTimer();
-    });
-    for (const item of elements.id.gainTimers){
-      item.target.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
-      item.effective.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
-      item.time.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
-      item.gain.addEventListener("input", audioAPI.getGainTimer.bind(audioAPI));
-    }
-    return elements.id.gainTimers[elements.id.gainTimers.length - 1];
-  },
-  get masterGainValue (): number | null {
-    if (!audioAPI.masterGain) return null;
-    return audioAPI.masterGain.gain.value;
-  },
-  set masterGainValue (value: number){
-    if (!audioAPI.masterGain) return;
-    elements.id.masterGainOutput.textContent = Math.floor((audioAPI.masterGain.gain.value = value) * 100) + "%"
   }
-};
+})();
 elements.id.scheduleAdd.addEventListener("click", () => {
   audioAPI.addGainTimer();
   audioAPI.getGainTimer();
 });
-audioAPI.init();
-audioAPI.fun.setOscillator();
+audioAPI.fun.resetOscillator();
 
 // volume list(seismic intensity)
 // const earthquakeReceiveVolumeList = [0.3,0.5,0.7,0.8,0.9,1,1,1,1];
@@ -508,7 +555,7 @@ var q_msiText = shindoListJP[q_maxShindo],
     q_startTime = 0,
     q_epiIdx = 0,
     quake_customComment = "";
-var earthquakes_log = {};
+  const earthquakes_log: Record<string, any> = {};
 // variables of Earthquake Early Warning
 var eewEpicenter = '',
     eewOriginTime = new Date("2000/01/01 00:00:00"),
@@ -1030,7 +1077,7 @@ const __drawTextureImage = (function(){
 
 (CanvasRenderingContext2D.prototype as any).drawTextureImage = __drawTextureImage;
 
-const sorabtn_qr_img = new Image();
+const sorabtn_qr_img = new Image() as TextureImageWithBitmap;
 {
   const onImageLoaded = (ev: Event) => {
     const target = ev.currentTarget as TextureImageWithBitmap | null;
@@ -1274,7 +1321,7 @@ function arrayCombining(array: any){
 void toRad;
 void ExRandom;
 
-const speechBase = new AudioSpeechController();
+const speechBase = new AudioSpeechController() as any;
 
 // if (window.Notification){
 //   if (Notification.permission === "denied"){
@@ -1474,7 +1521,7 @@ const SetMode = (int: number) => {
   // const lastInt = viewMode;
   viewMode = int;
   if (int !== 1){
-    if (audioAPI.oscillatorNode?.starting) audioAPI.fun.stopOscillator();
+    if (audioAPI.oscillatorNode.starting) audioAPI.fun.stopOscillator();
     const userSpace = speechBase.userSpace as any;
     if (userSpace) userSpace.isEewMode = false;
   }
@@ -1556,6 +1603,9 @@ BigInt.prototype.byteToString = Number.prototype.byteToString;
 const safeGetFormattedDate = (...args: any[]) => (getFormattedDate as any)(...args);
 const safeRainWindData = (...args: any[]) => (rain_windData as any)(...args);
 const safeHumanReadable = (...args: any[]) => (humanReadable as any)(...args);
+const schemeColor = (groupIndex: number, colorIndex: number, fallback = "#000") => {
+  return (colorScheme?.[colorThemeMode]?.[groupIndex]?.[colorIndex] ?? fallback) as string;
+};
 
 const Routines = {
   memory: {
@@ -1572,22 +1622,22 @@ const Routines = {
   subCanvasTime: function drawClock(targetTime: Date){
     const timeString1=(" "+targetTime.getHours()+":"+("0" + targetTime.getMinutes()).slice(-2)).slice(-5);
     const timeString2=("0"+(targetTime.getFullYear()-2000)).slice(-2)+"-"+("0"+(targetTime.getMonth()+1)).slice(-2)+"-"+("0" + targetTime.getDate()).slice(-2);
-    time.fillStyle = colorScheme[colorThemeMode][6][0];
+    time.fillStyle = schemeColor(6, 0, "#000");
     time.fillRect(0, 0, 128, 128);
     time.font = "bold 20px 'Inter'";
     time.textAlign = "center";
-    time.fillStyle = colorScheme[colorThemeMode][6][1];
+    time.fillStyle = schemeColor(6, 1, "#fff");
     time.fillText("Date", 64, 29);
     time.font = "bold 50px '7barSP'";
     time.textAlign = "start";
-    time.fillStyle = colorScheme[colorThemeMode][6][3];
+    time.fillStyle = schemeColor(6, 3, "#fff");
     time.fillText("88:88", 10, 110, 108);
-    time.fillStyle = colorScheme[colorThemeMode][6][2];
+    time.fillStyle = schemeColor(6, 2, "#000");
     time.fillText(timeString1, 10, 110, 108);
     time.font = "bold 29px '7barSP'";
-    time.fillStyle = colorScheme[colorThemeMode][6][3];
+    time.fillStyle = schemeColor(6, 3, "#fff");
     time.fillText("88-88-88", 10, 62, 108);
-    time.fillStyle = colorScheme[colorThemeMode][6][2];
+    time.fillStyle = schemeColor(6, 2, "#000");
     time.fillText(timeString2, 10, 62, 108);
   },
   md0title: function mode0titie(){
@@ -1620,7 +1670,7 @@ const Routines = {
     //背景(White)
     // const currentTime = Date.now();
 
-    const barColor = colorScheme[colorThemeMode][5][0] as string;
+    const barColor = schemeColor(5, 0, "#000");
     if (viewMode !== 1) drawRect(0, 60, 1080, 68, barColor);
     context.font = '300 40px ' + FontFamilies.sans;
     //context.font = '40px Arial, "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", Osaka, メイリオ, Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif';
@@ -1725,15 +1775,15 @@ const Routines = {
     if(viewingTextIndex >= textCount) viewingTextIndex = 0;
 
     if (viewMode === 0){
-      context.fillStyle = colorScheme[colorThemeMode][5][1];
+      context.fillStyle = schemeColor(5, 1, "#000");
       const normalMessage = normalItems[viewingTextIndex]?.message ?? directTexts[viewingTextIndex];
       context.fillText(normalMessage, textOffsetX, 110);
     } else if (viewMode === 2){
-      context.fillStyle = colorScheme[colorThemeMode][5][2];
+      context.fillStyle = schemeColor(5, 2, "#000");
       context.fillText(quakeText[q_currentShindo], textOffsetX, 110);
     }
     //背景(Blue)
-    context.fillStyle = colorScheme[colorThemeMode][1][mscale];
+    context.fillStyle = schemeColor(1, mscale, "#000");
     if (viewMode === 2) context.fillRect(0, 0, 1080, 60);
 
     switch (viewMode) {
@@ -1854,7 +1904,7 @@ const Routines = {
     });
 
     context.lineWidth = 1;
-    if (!isClose && viewMode==0 && isSoraview){
+    if (!sorabtnState.isClose && viewMode==0 && sorabtnState.isSoraview){
       context.fillStyle = "#0fa823";
       context.beginPath();
       context.moveTo(1080, 127);
@@ -1875,36 +1925,36 @@ const Routines = {
     }
     soraopen_moving = anim_soraview.current();
     soraopen_color = anim_soraview_color.current();
-    if(bit(soraopen, 0)){
+    if(bit(sorabtnState.soraopen, 0)){
       context.fillStyle = "#e3e3e3" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
       context.font = "30px "+FontFamilies.sans;
       context.fillRect(32-soraopen_moving, 0, 1016, 128);
       context.fillRect(1-soraopen_moving, 31, 1080, 64);
       context.beginPath();
-      context.arc(32-soraopen_moving, 31, 31, 0, 2*Math.PI, 0);
+      context.arc(32-soraopen_moving, 31, 31, 0, 2*Math.PI, false);
       context.fill();
       context.beginPath();
-      context.arc(32-soraopen_moving, 96, 31, 0, 2*Math.PI, 0);
+      context.arc(32-soraopen_moving, 96, 31, 0, 2*Math.PI, false);
       context.fill();
       context.beginPath();
-      context.arc(1049-soraopen_moving, 31, 31, 0, 2*Math.PI, 0);
+      context.arc(1049-soraopen_moving, 31, 31, 0, 2*Math.PI, false);
       context.fill();
       context.beginPath();
-      context.arc(1049-soraopen_moving, 96, 31, 0, 2*Math.PI, 0);
+      context.arc(1049-soraopen_moving, 96, 31, 0, 2*Math.PI, false);
       context.fill();
       context.fillStyle = "#000000" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
-      context.fillText("Q. "+question , 21-soraopen_moving, 33);
+      context.fillText("Q. "+sorabtnState.question , 21-soraopen_moving, 33);
       context.font = "25px "+FontFamilies.sans;
       context.fillStyle = "#2a25c6" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
-      if (intervalTime<40 || intervalTime1==1)context.fillText("青: " + choice1, 30-soraopen_moving, 69, 213);
+      if (intervalTime<40 || intervalTime1==1)context.fillText("青: " + sorabtnState.choice1, 30-soraopen_moving, 69, 213);
       context.fillStyle = "#cf3231" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
-      if (intervalTime<40 || intervalTime1==1)context.fillText("赤: " + choice2, 30-soraopen_moving, 104, 213);
+      if (intervalTime<40 || intervalTime1==1)context.fillText("赤: " + sorabtnState.choice2, 30-soraopen_moving, 104, 213);
       context.fillStyle = "#22c02d" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
-      if (intervalTime<40 || intervalTime1==1)context.fillText("緑: " + choice3, 256-soraopen_moving, 69, 213);
+      if (intervalTime<40 || intervalTime1==1)context.fillText("緑: " + sorabtnState.choice3, 256-soraopen_moving, 69, 213);
       context.fillStyle = "#b8ac10" + ('0'+Math.round(soraopen_color).toString(16)).slice(-2);
-      if (intervalTime<40 || intervalTime1==1)context.fillText("黄: " + choice4, 256-soraopen_moving, 104, 213);
-      if (bit(soraopen, 1)){
-        if (bit(soraopen, 1) && soraopen_interval1 === null && intervalTime1 == 0){
+      if (intervalTime<40 || intervalTime1==1)context.fillText("黄: " + sorabtnState.choice4, 256-soraopen_moving, 104, 213);
+      if (bit(sorabtnState.soraopen, 1)){
+        if (bit(sorabtnState.soraopen, 1) && soraopen_interval1 === null && intervalTime1 == 0){
           intervalArray.push(soraopen_interval1 = setInterval(
             function(){
               intervalTime++;
@@ -1929,24 +1979,24 @@ const Routines = {
           }
         }
         context.fillStyle = "#2a25c6";
-        if(intervalTime1==1 || intervalTime>120)context.fillText("青　"+ans1, 550, 31);
-        context.fillRect(675, 10, intervalTime>120?ans1/maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
+        if(intervalTime1==1 || intervalTime>120)context.fillText("青　"+sorabtnState.ans1, 550, 31);
+        context.fillRect(675, 10, intervalTime>120?sorabtnState.ans1/sorabtnState.maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
         context.fillStyle = "#cf3231";
-        if(intervalTime1==1 || intervalTime>120)context.fillText("赤　"+ans2, 550, 59);
-        context.fillRect(675, 38, intervalTime>120?ans2/maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
+        if(intervalTime1==1 || intervalTime>120)context.fillText("赤　"+sorabtnState.ans2, 550, 59);
+        context.fillRect(675, 38, intervalTime>120?sorabtnState.ans2/sorabtnState.maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
         context.fillStyle = "#22c00d";
-        if(intervalTime1==1 || intervalTime>120)context.fillText("緑　"+ans3, 550, 87);
-        context.fillRect(675, 66, intervalTime>120?ans3/maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
+        if(intervalTime1==1 || intervalTime>120)context.fillText("緑　"+sorabtnState.ans3, 550, 87);
+        context.fillRect(675, 66, intervalTime>120?sorabtnState.ans3/sorabtnState.maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
         context.fillStyle = "#b8ac10";
-        if(intervalTime1==1 || intervalTime>120)context.fillText("黄　"+ans4, 550, 115);
-        context.fillRect(675, 94, intervalTime>120?ans4/maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
+        if(intervalTime1==1 || intervalTime>120)context.fillText("黄　"+sorabtnState.ans4, 550, 115);
+        context.fillRect(675, 94, intervalTime>120?sorabtnState.ans4/sorabtnState.maxans*385*(intervalTime1==1?1:(intervalTime-120)/90):0, 24);
         if(intervalTime1==0){
           context.fillStyle = "#e3e3e3"+('0'+Math.round(soraopen_color).toString(16)).slice(-2);
           context.fillRect(590, 5, 80, 115);
         }
       }
     }
-    if(soraopen_moving == 1 && soraopen == 1){
+    if(soraopen_moving == 1 && sorabtnState.soraopen == 1){
       context.fillStyle = "black";
       context.font = "25px "+FontFamilies.sans;
       context.fillText("アンケートの参加はこちら", 585, 50);
@@ -1958,7 +2008,7 @@ const Routines = {
       context.stroke();
       context.font = "italic 25px 'Microsoft Sans Serif', Arial, sans-serif";
       context.fillText("http://wni.my/?sorabtn", 600, 78);
-      context.drawImage(sorabtn_qr_img.imgBmp, 900, -3);
+      if (sorabtn_qr_img.imgBmp) context.drawImage(sorabtn_qr_img.imgBmp, 900, -3);
     }
 
     // 分更新動作
@@ -2003,21 +2053,7 @@ const Routines = {
       (audioAPI.fun as any)[freqKey]?.();
     }
 
-    //audio repeatition control
-    const bgmElements = document.getElementsByClassName('BGM') as HTMLCollectionOf<HTMLAudioElement>;
-    const bgmRepeatingStartMin = document.getElementsByClassName('BGMrepeatingStartMin') as HTMLCollectionOf<HTMLInputElement>;
-    const bgmRepeatingStopMin = document.getElementsByClassName('BGMrepeatingStopMin') as HTMLCollectionOf<HTMLInputElement>;
-    const bgmRepeatingStartSec = document.getElementsByClassName('BGMrepeatingStartSec') as HTMLCollectionOf<HTMLInputElement>;
-    const bgmRepeatingStopSec = document.getElementsByClassName('BGMrepeatingStopSec') as HTMLCollectionOf<HTMLInputElement>;
-    for (let i=0; i<bgmElements.length; i++){
-      if (Number(bgmRepeatingStopMin[i].value) * 60 + Number(bgmRepeatingStopSec[i].value) < bgmElements[i].currentTime && bgmElements[i].checked){
-        bgmElements[i].currentTime = Number(bgmRepeatingStartMin[i].value) * 60 + Number(bgmRepeatingStartSec[i].value);
-      }
-      bgmRepeatingStartMin[i].max = Math.floor(bgmElements[i].duration/60);
-      bgmRepeatingStopMin[i].max = Math.floor(bgmElements[i].duration/60);
-      bgmRepeatingStartSec[i].max = bgmElements[i].duration<60 ? Math.floor(bgmElements[i].duration) : 60;
-      bgmRepeatingStopSec[i].max = bgmElements[i].duration<60 ? Math.floor(bgmElements[i].duration) : 60;
-    }
+    // audio repeat control (legacy inputs were removed; keep placeholder for future UI)
 
     {
       const current = anim_fullscreen.current();
@@ -2087,7 +2123,8 @@ var isEEW = false,
     lastOriginalText = "",
     eewDatas = {
       version: AppVersionView,
-      logs: []
+      logs: [],
+      savedTime: undefined as number | undefined
     },
     eewAssumptionsLog = {};
 void isEEW;
@@ -2141,10 +2178,10 @@ function eewChecking_c1(){
           SFXController.play(sounds.eew.continue);
         }
         if (eewIsAlert_changed){
-          if (!audioAPI.oscillatorNode?.starting) audioAPI.fun.startOscillator();
+          if (!audioAPI.oscillatorNode.starting) audioAPI.fun.startOscillator();
         }
         if (!eewIsAlert){
-          if (audioAPI.oscillatorNode?.starting) audioAPI.fun.stopOscillator();
+          if (audioAPI.oscillatorNode.starting) audioAPI.fun.stopOscillator();
         }
         const isForcedTime = eewOriginTime.getTime()+90000 > (safeGetFormattedDate(2) as any);
         if (isForcedTime || Number(eewReportNumber) < 13){
@@ -2187,13 +2224,20 @@ function eewSpeech(quakeId: string, maxShindo: number, epicenterId: string, magn
     speechUser.eew.depth = "";
   }
   if (speechBase.paused && (speechUser.eew.epicenterId !== epicenterId || speechUser.eew.intensity !== maxShindo || speechUser.eew.magnitude !== magnitude)){
-    if (elements.id.speechCheckboxEEW.checked) speechBase.start([
-      ...(speechUser.eew.epicenterId !== epicenterId ? [{ type: "id", id: "eew.epicenter_long" }] : []),
-      ...(speechShindo ? [{ type: "path", speakerId: speechUser.speakerId, path: "eew.ungrouped.3" },
-      { type: "id", id: "eew.max_shindo" }] : []),
-      ...(speechMag ? [{ type: "path", speakerId: speechUser.speakerId, path: "eew.ungrouped.4" },
-      { type: "id", id: "eew.magnitude_val" }] : [])
-    ]);
+    if (elements.id.speechCheckboxEEW.checked) {
+      const queue = [
+        ...(speechUser.eew.epicenterId !== epicenterId ? [{ type: "id" as const, id: "eew.epicenter_long" }] : []),
+        ...(speechShindo ? [
+          { type: "path" as const, speakerId: speechUser.speakerId, path: "eew.ungrouped.3" },
+          { type: "id" as const, id: "eew.max_shindo" }
+        ] : []),
+        ...(speechMag ? [
+          { type: "path" as const, speakerId: speechUser.speakerId, path: "eew.ungrouped.4" },
+          { type: "id" as const, id: "eew.magnitude_val" }
+        ] : [])
+      ];
+      speechBase.start(queue as unknown as AudioSpeechQueueParam[]);
+    }
     speechUser.eew.quakeId = quakeId;
     speechUser.eew.intensity = maxShindo;
     speechUser.eew.epicenterId = epicenterId;
@@ -2211,12 +2255,14 @@ var eewEpiPos = [992,63];
  *  @param {float} latitude
  *  @param {iedred7584EEW.Data.Forecast} warnAreas
  */
-async function eewMapDraw(longitude, latitude, warnAreas=[]){
+async function eewMapDraw(longitude: number, latitude: number, warnAreas: any[] = []){
   try {
-    let areaCodes = [];
+    const areaCodes: string[] = [];
     for (const area of warnAreas){
-      const code = AreaForecastLocalE[area.Intensity.Code + ""].parent;
-      if(!areaCodes.includes(code)) areaCodes.push(code);
+      const codeKey = area?.Intensity?.Code;
+      const mapped = codeKey ? (AreaForecastLocalE as any)[String(codeKey)] : undefined;
+      const parentCode = mapped?.parent as string | undefined;
+      if (parentCode && !areaCodes.includes(parentCode)) areaCodes.push(parentCode);
     }
     warnAreas = areaCodes;
   } catch (error) {
@@ -2235,7 +2281,8 @@ async function eewMapDraw(longitude, latitude, warnAreas=[]){
     if (longitude<128) eewEpiPos[0] += (longitude-128)*3;
   }
   if (longitude>146) eewEpiPos[0] += (longitude-146)*3;
-  let magnification = await window.connect2sandbox("quakemap_calc_magnification", { warn: warnAreas, lon: longitude, lat: latitude });
+  const connect2sandbox = (window as any).connect2sandbox as ((name: string, payload: any) => Promise<number>) | undefined;
+  let magnification = connect2sandbox ? await connect2sandbox("quakemap_calc_magnification", { warn: warnAreas, lon: longitude, lat: latitude }) : 1;
   lineWidth = 2.5/Math.max(magnification, 2.5);
   // console.log("magnification = "+magnification+"\n    lineWidth = "+lineWidth);
 
@@ -2244,11 +2291,12 @@ async function eewMapDraw(longitude, latitude, warnAreas=[]){
   context.fillRect(905, 0, 175, 128);
   context.strokeStyle = colorThemeMode != 2 ? "#333" : "#aaa";
   context.lineWidth = lineWidth;
-  Japan_geojson.features.forEach(function(int){
+  const japanGeo = (Japan_geojson as any)?.features ?? [];
+  japanGeo.forEach(function(int: any){
     if (warnAreas.includes(int.properties.code)) context.fillStyle = colorThemeMode != 2 ? "#fdab29" : "#ffed4a"; else context.fillStyle = colorThemeMode != 2 ? "#32a852" : "#666";
     switch (int.geometry.type) {
       case "MultiPolygon":
-        int.geometry.coordinates.forEach(function(points){
+        int.geometry.coordinates.forEach(function(points: any[]){
           context.beginPath();
           for (let i=0; i<points[0].length; i++) {
             const point = points[0][i];
@@ -2263,7 +2311,7 @@ async function eewMapDraw(longitude, latitude, warnAreas=[]){
         });
         break;
       case "Polygon":
-        int.geometry.coordinates.forEach(function(points){
+        int.geometry.coordinates.forEach(function(points: any[]){
           context.beginPath();
           for (let i=0; i<points.length; i++) {
             let point = points[i];
@@ -2281,7 +2329,7 @@ async function eewMapDraw(longitude, latitude, warnAreas=[]){
   });
   context.lineWidth = 1;
   eewMapBmp = null;
-  createImageBitmap(canvas1, 905, 0, 175, 128).then(bmp => eewMapBmp = bmp);
+  if (canvas1) createImageBitmap(canvas1, 905, 0, 175, 128).then(bmp => eewMapBmp = bmp);
   /*
     * 中心992px,63px
     * × 989-4px,60-4px to 995+4px,66+4px
@@ -2302,39 +2350,59 @@ function strWidth(str: string) {
   return context.measureText(str).width;
 }
 
-function soraopen_stop() {
+export function soraopen_stop() {
   clearInterval(intervalArray.shift());
   soraopen_move = null;
 }
 
-var qid = "",
-    question = "",
-    choice1 = "",
-    choice2 = "",
-    choice3 = "",
-    choice4 = "",
-    closeTime = "",
-    ans1 = 0,
-    ans2 = 0,
-    ans3 = 0,
-    ans4 = 0,
-    maxans = 0,
-    isClose = true,
-    soraopen = 0,
-    isSoraview = false;
+type SorabtnState = {
+  qid: string;
+  question: string;
+  choice1: string;
+  choice2: string;
+  choice3: string;
+  choice4: string;
+  closeTime: string;
+  ans1: number;
+  ans2: number;
+  ans3: number;
+  ans4: number;
+  maxans: number;
+  isClose: boolean;
+  soraopen: number;
+  isSoraview: boolean;
+};
+const sorabtnState: SorabtnState = {
+  qid: "",
+  question: "",
+  choice1: "",
+  choice2: "",
+  choice3: "",
+  choice4: "",
+  closeTime: "",
+  ans1: 0,
+  ans2: 0,
+  ans3: 0,
+  ans4: 0,
+  maxans: 0,
+  isClose: true,
+  soraopen: 0,
+  isSoraview: false
+};
 async function sorabtn(){
   const data = await fetch(RequestURL.wni_sorabtn).then(res => res.json());
   sorabtn.tracker.update();
 
-  qid = data['data']['qid'];
-  question = data['data'][0]['question'];
-  closeTime = data['data'][0]['closeTime'];
-  ans1 = data['data'][0]['ans1'] - 0;
-  ans2 = data['data'][0]['ans2'] - 0;
-  ans3 = data['data'][0]['ans3'] - 0;
-  ans4 = data['data'][0]['ans4'] - 0;
-  closeTime != "" ? isClose = true : isClose = false;
-  maxans = [ans1, ans2, ans3, ans4].sort(function(a, b) { return b - a; })[0];
+  sorabtnState.qid = data['data']['qid'];
+  sorabtnState.question = data['data'][0]['question'];
+  sorabtnState.closeTime = data['data'][0]['closeTime'];
+  sorabtnState.ans1 = data['data'][0]['ans1'] - 0;
+  sorabtnState.ans2 = data['data'][0]['ans2'] - 0;
+  sorabtnState.ans3 = data['data'][0]['ans3'] - 0;
+  sorabtnState.ans4 = data['data'][0]['ans4'] - 0;
+  sorabtnState.isClose = sorabtnState.closeTime !== "";
+  sorabtnState.maxans = [sorabtnState.ans1, sorabtnState.ans2, sorabtnState.ans3, sorabtnState.ans4].sort(function(a, b) { return b - a; })[0];
+  return sorabtnState;
 }
 sorabtn.tracker = new TrafficTracker("ソラボタン");
 
@@ -2362,22 +2430,22 @@ async function sorabtn_view(){
 
     sorabtn.tracker.update();
 
-    soraopen = 1;
+    sorabtnState.soraopen = 1;
     anim_soraview.start();
     anim_soraview_color.start();
-    qid = data['data']['qid'];
-    question = data['data'][0]['question'];
-    choice1 = data['data'][0]['choice1'];
-    choice2 = data['data'][0]['choice2'];
-    choice3 = data['data'][0]['choice3'];
-    choice4 = data['data'][0]['choice4'];
-    closeTime = data['data'][0]['closeTime'];
-    ans1 = data['data'][0]['ans1'] - 0;
-    ans2 = data['data'][0]['ans2'] - 0;
-    ans3 = data['data'][0]['ans3'] - 0;
-    ans4 = data['data'][0]['ans4'] - 0;
-    closeTime != "" ? isClose=true : isClose=false;
-    maxans = [ans1,ans2,ans3,ans4].sort(function(a, b) { return b - a; })[0];
+    sorabtnState.qid = data['data']['qid'];
+    sorabtnState.question = data['data'][0]['question'];
+    sorabtnState.choice1 = data['data'][0]['choice1'];
+    sorabtnState.choice2 = data['data'][0]['choice2'];
+    sorabtnState.choice3 = data['data'][0]['choice3'];
+    sorabtnState.choice4 = data['data'][0]['choice4'];
+    sorabtnState.closeTime = data['data'][0]['closeTime'];
+    sorabtnState.ans1 = data['data'][0]['ans1'] - 0;
+    sorabtnState.ans2 = data['data'][0]['ans2'] - 0;
+    sorabtnState.ans3 = data['data'][0]['ans3'] - 0;
+    sorabtnState.ans4 = data['data'][0]['ans4'] - 0;
+    sorabtnState.isClose = sorabtnState.closeTime !== "";
+    sorabtnState.maxans = [sorabtnState.ans1,sorabtnState.ans2,sorabtnState.ans3,sorabtnState.ans4].sort(function(a, b) { return b - a; })[0];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.log("Loading Error (sorabtn-view)\n" + message);
@@ -2422,35 +2490,35 @@ async function sorabtn_open(){
   soraopen_intervaltime = 0;
   try {
     const data = await fetchJsonWithTimeout(RequestURL.wni_sorabtn, 4500, 'no-cache');
-      sorabtn.tracker.update();
+    sorabtn.tracker.update();
 
-      soraopen = 3;
-      if(anim_soraview.startTime == -1){
-        anim_soraview.start();
-      }
-      if(anim_soraview_color.startTime == -1){
-        anim_soraview_color.start();
-      }
-      qid = data['data']['qid'];
-      question = data['data'][0]['question'];
-      choice1 = data['data'][0]['choice1'];
-      choice2 = data['data'][0]['choice2'];
-      choice3 = data['data'][0]['choice3'];
-      choice4 = data['data'][0]['choice4'];
-      closeTime = data['data'][0]['closeTime'];
-      ans1 = data['data'][0]['ans1'] - 0;
-      ans2 = data['data'][0]['ans2'] - 0;
-      ans3 = data['data'][0]['ans3'] - 0;
-      ans4 = data['data'][0]['ans4'] - 0;
-      closeTime != "" ? isClose=true : isClose=false;
-      maxans = [ans1,ans2,ans3,ans4].sort(function(a, b) { return b - a; })[0];
+    sorabtnState.soraopen = 3;
+    if(anim_soraview.startTime == -1){
+      anim_soraview.start();
+    }
+    if(anim_soraview_color.startTime == -1){
+      anim_soraview_color.start();
+    }
+    sorabtnState.qid = data['data']['qid'];
+    sorabtnState.question = data['data'][0]['question'];
+    sorabtnState.choice1 = data['data'][0]['choice1'];
+    sorabtnState.choice2 = data['data'][0]['choice2'];
+    sorabtnState.choice3 = data['data'][0]['choice3'];
+    sorabtnState.choice4 = data['data'][0]['choice4'];
+    sorabtnState.closeTime = data['data'][0]['closeTime'];
+    sorabtnState.ans1 = data['data'][0]['ans1'] - 0;
+    sorabtnState.ans2 = data['data'][0]['ans2'] - 0;
+    sorabtnState.ans3 = data['data'][0]['ans3'] - 0;
+    sorabtnState.ans4 = data['data'][0]['ans4'] - 0;
+    sorabtnState.isClose = sorabtnState.closeTime !== "";
+    sorabtnState.maxans = [sorabtnState.ans1,sorabtnState.ans2,sorabtnState.ans3,sorabtnState.ans4].sort(function(a, b) { return b - a; })[0];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.log("Loading Error (sorabtn-open)\n" + message);
-    }
+  }
 }
 function sorabtn_close(){
-  soraopen = 0;
+  sorabtnState.soraopen = 0;
   intervalTime = 0;
   intervalTime1 = 0;
   soraopen_moving = 1081;
@@ -2476,235 +2544,227 @@ async function rain_windData(isFull: boolean){
   weather_prelist = [[],[],[],[],[]];
   try {
     const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvPre1h00_rct, 50000, 'no-cache', 'shift_jis');
-      rain_windData.pre1h00_rct.update();
-      weather1hourrain = [];
-      var weatherDataListCSV = [];
-      var tmp = data.split("\n");
-      for (let i=0; i<tmp.length-1; i++) {
-        weatherDataListCSV[i] = tmp[i].split(',');
+    rain_windData.pre1h00_rct.update();
+    weather1hourrain = [];
+    var weatherDataListCSV = [];
+    var tmp = data.split("\n");
+    for (let i=0; i<tmp.length-1; i++) {
+      weatherDataListCSV[i] = tmp[i].split(',');
+    }
+    let obsTime = weatherDataListCSV[518][6]+"日"+weatherDataListCSV[518][7]+"時"+weatherDataListCSV[518][8]+"分現在";
+    let i;
+    for (i=1; i<weatherDataListCSV.length; i++) {
+      let obj = {pref:"", name:"", value: 0};
+      obj.pref=weatherDataListCSV[i][1];
+      obj.name=weatherDataListCSV[i][2];
+      obj.value=Number(weatherDataListCSV[i][9]);
+      if(obj.value!=0 && weatherDataListCSV[i][10]=="8")weather1hourrain.push(obj);
+      if(weather_prelist[0].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[0].push(weatherDataListCSV[i][1]);
+    }
+    weather1hourrain.sort(function(a,b){return b.value-a.value});
+    weather1hourrainstr = "[Maximum hourly precipitation]　("+obsTime+")　　　";
+    var rank = 0;
+    for(let i=0; i<weather1hourrain.length; i++){
+      if(rank!=0)if(weather1hourrain[i].value != weather1hourrain[i-1].value)rank=i+1; else; else rank++;
+      if(i>20){
+        if(weather1hourrain[i].value!=weather1hourrain[i-1].value)break;
       }
-      let obsTime = weatherDataListCSV[518][6]+"日"+weatherDataListCSV[518][7]+"時"+weatherDataListCSV[518][8]+"分現在";
-      let i;
-      for (i=1; i<weatherDataListCSV.length; i++) {
-        let obj = {pref:"", name:"", value: 0};
-        obj.pref=weatherDataListCSV[i][1];
-        obj.name=weatherDataListCSV[i][2];
-        obj.value=Number(weatherDataListCSV[i][9]);
-        if(obj.value!=0 && weatherDataListCSV[i][10]=="8")weather1hourrain.push(obj);
-        if(weather_prelist[0].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[0].push(weatherDataListCSV[i][1]);
-      }
-    let s=""; i=0; // legacy leftover
-      weather1hourrain.sort(function(a,b){return b.value-a.value});
-      weather1hourrainstr = "[Maximum hourly precipitation]　("+obsTime+")　　　";
-      var rank = 0;
-      for(let i=0; i<weather1hourrain.length; i++){
-        if(rank!=0)if(weather1hourrain[i].value != weather1hourrain[i-1].value)rank=i+1; else; else rank++;
-        if(i>20){
-          if(weather1hourrain[i].value!=weather1hourrain[i-1].value)break;
-        }
-        weather1hourrainstr += rank+")"+weather1hourrain[i].pref+" "+weather1hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather1hourrain[i].value+"mm/h　　 ";
-      }
+      weather1hourrainstr += rank+")"+weather1hourrain[i].pref+" "+weather1hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather1hourrain[i].value+"mm/h　　 ";
+    }
     if(weather1hourrainstr===""){
       weather1hourrainstr = "過去1時間の降水観測はありません。";
     }
   } catch (error) {
     console.error("Loading Error (rain_windData pre1h00_rct)", error);
-        }
+  }
 
   try {
     const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvPre24h00_rct, 50000, 'no-cache', 'shift_jis');
-      rain_windData.pre24h00_rct.update();
-      weather24hourrain = [];
-      var weatherDataListCSV = [];
-      var tmp = data.split("\n");
-      for (var i=0; i<tmp.length-1; i++) {
-        weatherDataListCSV[i] = tmp[i].split(',');
+    rain_windData.pre24h00_rct.update();
+    weather24hourrain = [];
+    const weatherDataListCSV: string[][] = [];
+    const tmp = data.split("\n");
+    for (let j=0; j<tmp.length-1; j++) {
+      weatherDataListCSV[j] = tmp[j].split(',');
+    }
+    const obsTime = weatherDataListCSV[518][6]+"日"+weatherDataListCSV[518][7]+"時"+weatherDataListCSV[518][8]+"分現在";
+    for (let j=1; j<weatherDataListCSV.length; j++) {
+      const obj = {pref:"", name:"", value: 0};
+      obj.pref=weatherDataListCSV[j][1];
+      obj.name=weatherDataListCSV[j][2];
+      obj.value=Number(weatherDataListCSV[j][9]);
+      if(obj.value!=0 && weatherDataListCSV[j][10]=="8")weather24hourrain.push(obj);
+      if(weather_prelist[1].indexOf(weatherDataListCSV[j][1])==-1)weather_prelist[1].push(weatherDataListCSV[j][1]);
+    }
+    weather24hourrain.sort(function(a,b){return b.value-a.value});
+    weather24hoursrainstr = "[Maximum 24-hour precipitation]　("+obsTime+")　　　";
+    var rank = 0;
+    for (let i=0; i<weather24hourrain.length; i++){
+      if (rank!=0) if(weather24hourrain[i].value != weather24hourrain[i-1].value)rank=i+1; else; else rank++;
+      if (i>20){
+        if (weather24hourrain[i].value!=weather24hourrain[i-1].value) break;
       }
-      let obsTime = weatherDataListCSV[518][6]+"日"+weatherDataListCSV[518][7]+"時"+weatherDataListCSV[518][8]+"分現在";
-      var i;
-      for (i=1; i<weatherDataListCSV.length; i++) {
-        var obj = {pref:"", name:"", value: 0};
-        obj.pref=weatherDataListCSV[i][1];
-        obj.name=weatherDataListCSV[i][2];
-        obj.value=Number(weatherDataListCSV[i][9]);
-        if(obj.value!=0 && weatherDataListCSV[i][10]=="8")weather24hourrain.push(obj);
-        if(weather_prelist[1].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[1].push(weatherDataListCSV[i][1]);
-      }
-      var s="";i=0;
-      weather24hourrain.sort(function(a,b){return b.value-a.value});
-      weather24hoursrainstr = "[Maximum 24-hour precipitation]　("+obsTime+")　　　";
-      var rank = 0;
-      for (let i=0; i<weather24hourrain.length; i++){
-        if (rank!=0) if(weather24hourrain[i].value != weather24hourrain[i-1].value)rank=i+1; else; else rank++;
-        if (i>20){
-          if (weather24hourrain[i].value!=weather24hourrain[i-1].value) break;
-        }
-        weather24hoursrainstr += rank+")"+weather24hourrain[i].pref+" "+weather24hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather24hourrain[i].value+"mm/d　　 ";
-      }
+      weather24hoursrainstr += rank+")"+weather24hourrain[i].pref+" "+weather24hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather24hourrain[i].value+"mm/d　　 ";
+    }
     if (weather24hoursrainstr === ""){
       weather24hoursrainstr = "過去24時間の降水観測はありません。";
-      }
+    }
   } catch (error) {
     console.error("Loading Error (rain_windData pre24h00_rct)", error);
-    }
+  }
 
   if (isFull){
     try {
       const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMxwsp00_rct, 50000, 'no-cache', 'shift_jis');
-        rain_windData.mxwsp00_rct.update();
-        weatherMaximumWindSpeed = [];
-        var weatherDataListCSV = [];
-        var tmp = data.split("\n");
-        for (var i=0; i<tmp.length-1; i++) {
-          weatherDataListCSV[i] = tmp[i].split(',');
-        }
-        let obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
-        var i;
-        for (i=1; i<weatherDataListCSV.length; i++) {
-          var obj = {pref:"", name:"", value: 0};
-          obj.pref = weatherDataListCSV[i][1];
-          obj.name = weatherDataListCSV[i][2];
-          obj.value = Number(weatherDataListCSV[i][9]);
-          if(Number(weatherDataListCSV[i][10])>3)weatherMaximumWindSpeed.push(obj);
-          if(weather_prelist[2].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[2].push(weatherDataListCSV[i][1]);
-        }
-        var s=""; i=0;
-        weatherMaximumWindSpeed.sort(function(a,b){return b.value-a.value});
-        weatherMaximumWindSpeedstr = "[Maximum wind speed]　("+obsTime+")　　　";
-        var rank = 0;
+      rain_windData.mxwsp00_rct.update();
+      weatherMaximumWindSpeed = [];
+      var weatherDataListCSV = [];
+      var tmp = data.split("\n");
+      for (let i=0; i<tmp.length-1; i++) {
+        weatherDataListCSV[i] = tmp[i].split(',');
+      }
+      let obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
+      let i: number;
+      for (i=1; i<weatherDataListCSV.length; i++) {
+        var obj = {pref:"", name:"", value: 0};
+        obj.pref = weatherDataListCSV[i][1];
+        obj.name = weatherDataListCSV[i][2];
+        obj.value = Number(weatherDataListCSV[i][9]);
+        if(Number(weatherDataListCSV[i][10])>3)weatherMaximumWindSpeed.push(obj);
+        if(weather_prelist[2].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[2].push(weatherDataListCSV[i][1]);
+      }
+      weatherMaximumWindSpeed.sort(function(a,b){return b.value-a.value});
+      weatherMaximumWindSpeedstr = "[Maximum wind speed]　("+obsTime+")　　　";
+      var rank = 0;
       let unit = (document.getElementsByName('unitWinds')[0] as HTMLSelectElement).value;
-        switch (unit) {
-          case "km/h":
-            for(let i=0; i<weatherMaximumWindSpeed.length; i++){
-              weatherMaximumWindSpeed[i].value *= 3.6;
-              weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
-            }
-            break;
-          case "mph":
-            for(let i=0; i<weatherMaximumWindSpeed.length; i++){
-              weatherMaximumWindSpeed[i].value *= 2.2369;
-              weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
-            }
-            break;
-          case "kt":
-            for(let i=0; i<weatherMaximumWindSpeed.length; i++){
-              weatherMaximumWindSpeed[i].value *= 1.9438;
-              weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
-            }
-            break;
-          case "ft/s":
-            for(let i=0; i<weatherMaximumWindSpeed.length; i++){
-              weatherMaximumWindSpeed[i].value *= 3.2808;
-              weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
-            }
-            break;
-        }
-        for(var i=0; i<weatherMaximumWindSpeed.length; i++){
-          if(rank != 0) if(weatherMaximumWindSpeed[i].value != weatherMaximumWindSpeed[i-1].value)rank=i+1; else; else rank++;
-          if(i>20){
-            if(weatherMaximumWindSpeed[i].value!=weatherMaximumWindSpeed[i-1].value)break;
+      switch (unit) {
+        case "km/h":
+          for(let i=0; i<weatherMaximumWindSpeed.length; i++){
+            weatherMaximumWindSpeed[i].value *= 3.6;
+            weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
           }
-          weatherMaximumWindSpeedstr += rank+")"+weatherMaximumWindSpeed[i].pref+" "+weatherMaximumWindSpeed[i].name.replace(/（.{1,}）/, "")+" "+weatherMaximumWindSpeed[i].value+""+unit+"　　 ";
+          break;
+        case "mph":
+          for(let i=0; i<weatherMaximumWindSpeed.length; i++){
+            weatherMaximumWindSpeed[i].value *= 2.2369;
+            weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
+          }
+          break;
+        case "kt":
+          for(let i=0; i<weatherMaximumWindSpeed.length; i++){
+            weatherMaximumWindSpeed[i].value *= 1.9438;
+            weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
+          }
+          break;
+        case "ft/s":
+          for(let i=0; i<weatherMaximumWindSpeed.length; i++){
+            weatherMaximumWindSpeed[i].value *= 3.2808;
+            weatherMaximumWindSpeed[i].value = Math.round(weatherMaximumWindSpeed[i].value);
+          }
+          break;
+      }
+      for(let j=0; j<weatherMaximumWindSpeed.length; j++){
+        if(rank != 0) if(weatherMaximumWindSpeed[j].value != weatherMaximumWindSpeed[j-1].value)rank=j+1; else; else rank++;
+        if(j>20){
+          if(weatherMaximumWindSpeed[j].value!=weatherMaximumWindSpeed[j-1].value)break;
         }
+        weatherMaximumWindSpeedstr += rank+")"+weatherMaximumWindSpeed[j].pref+" "+weatherMaximumWindSpeed[j].name.replace(/（.{1,}）/, "")+" "+weatherMaximumWindSpeed[j].value+""+unit+"　　 ";
+      }
     } catch (error) {
       console.error("Loading Error (rain_windData mxwsp00_rct)", error);
     }
 
     try {
       const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMxtemsadext00_rct, 50000, 'no-cache', 'shift_jis');
-        rain_windData.mxtemsadext00_rct.update();
-        weather_mxtemsadext = [];
-        var weatherDataListCSV = [];
-        var tmp = data.split("\n");
-        for (var i=0; i<tmp.length-1; i++) {
-          weatherDataListCSV[i] = tmp[i].split(',');
-        }
-        let obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
-        var i;
-        for (i=1; i<weatherDataListCSV.length; i++) {
-          var obj = {pref:"", name:"", value: 0};
-          obj.pref = weatherDataListCSV[i][1];
-          obj.name = weatherDataListCSV[i][2];
-          obj.value = Number(weatherDataListCSV[i][9]);
-          if(Number(weatherDataListCSV[i][10])>3)weather_mxtemsadext.push(obj);
-          if(weather_prelist[3].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[3].push(weatherDataListCSV[i][1]);
-        }
-        var s="";i=0;
-        weather_mxtemsadext.sort(function(a,b){return b.value-a.value});
-        weather_mxtemsadextstr = "[Maximum temperature]　("+obsTime+")　　　";
-        var rank = 0;
+      rain_windData.mxtemsadext00_rct.update();
+      weather_mxtemsadext = [];
+      const weatherDataListCSV: string[][] = [];
+      const tmp = data.split("\n");
+      for (let j=0; j<tmp.length-1; j++) {
+        weatherDataListCSV[j] = tmp[j].split(',');
+      }
+      const obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
+      for (let j=1; j<weatherDataListCSV.length; j++) {
+        const obj = {pref:"", name:"", value: 0};
+        obj.pref = weatherDataListCSV[j][1];
+        obj.name = weatherDataListCSV[j][2];
+        obj.value = Number(weatherDataListCSV[j][9]);
+        if(Number(weatherDataListCSV[j][10])>3)weather_mxtemsadext.push(obj);
+        if(weather_prelist[3].indexOf(weatherDataListCSV[j][1])==-1)weather_prelist[3].push(weatherDataListCSV[j][1]);
+      }
+      weather_mxtemsadext.sort(function(a,b){return b.value-a.value});
+      weather_mxtemsadextstr = "[Maximum temperature]　("+obsTime+")　　　";
+      var rank = 0;
       let unit = (document.getElementsByName('unitTemp')[0] as HTMLSelectElement).value;
-        switch (unit) {
-          case "K":
-            for(let i=0; i<weather_mxtemsadext.length; i++){
-              weather_mxtemsadext[i].value += 273.15;
-            }
-            break;
-          case "℉":
-            for(let i=0; i<weather_mxtemsadext.length; i++){
-              weather_mxtemsadext[i].value = weather_mxtemsadext[i].value * 1.8 + 32;
-              weather_mxtemsadext[i].value = Math.round(weather_mxtemsadext[i].value);
-            }
-            break;
-        }
-        for(var i=0; i<weather_mxtemsadext.length; i++){
-          if(rank!=0)if(weather_mxtemsadext[i].value != weather_mxtemsadext[i-1].value)rank=i+1; else; else rank++;
-          if(i>20){
-            if(weather_mxtemsadext[i].value!=weather_mxtemsadext[i-1].value)break;
+      switch (unit) {
+        case "K":
+          for(let i=0; i<weather_mxtemsadext.length; i++){
+            weather_mxtemsadext[i].value += 273.15;
           }
-          weather_mxtemsadextstr += rank+")"+weather_mxtemsadext[i].pref+" "+weather_mxtemsadext[i].name.replace(/（.{1,}）/, "")+" "+weather_mxtemsadext[i].value+""+unit+"　　 ";
+          break;
+        case "℉":
+          for(let i=0; i<weather_mxtemsadext.length; i++){
+            weather_mxtemsadext[i].value = weather_mxtemsadext[i].value * 1.8 + 32;
+            weather_mxtemsadext[i].value = Math.round(weather_mxtemsadext[i].value);
+          }
+          break;
+      }
+      for(let j=0; j<weather_mxtemsadext.length; j++){
+        if(rank!=0)if(weather_mxtemsadext[j].value != weather_mxtemsadext[j-1].value)rank=j+1; else; else rank++;
+        if(j>20){
+          if(weather_mxtemsadext[j].value!=weather_mxtemsadext[j-1].value)break;
         }
+        weather_mxtemsadextstr += rank+")"+weather_mxtemsadext[j].pref+" "+weather_mxtemsadext[j].name.replace(/（.{1,}）/, "")+" "+weather_mxtemsadext[j].value+""+unit+"　　 ";
+      }
     } catch (error) {
       console.error("Loading Error (rain_windData mxtemsadext00_rct)", error);
     }
 
     try {
       const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMntemsadext00_rct, 50000, 'no-cache', 'shift_jis');
-        rain_windData.mntemsadext00_rct.update();
-        weather_mntemsadext = [];
-        var weatherDataListCSV = [];
-        var tmp = data.split("\n");
-        for (var i=0; i<tmp.length-1; i++) {
-          weatherDataListCSV[i] = tmp[i].split(',');
-        }
-        let obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
-        var i;
-        for (i=1; i<weatherDataListCSV.length; i++) {
-          var obj = {pref:"", name:"", value: 0};
-          obj.pref = weatherDataListCSV[i][1];
-          obj.name = weatherDataListCSV[i][2];
-          obj.value = Number(weatherDataListCSV[i][9]);
-          if(Number(weatherDataListCSV[i][10])>3)weather_mntemsadext.push(obj);
-          if(weather_prelist[4].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[4].push(weatherDataListCSV[i][1]);
-        }
-        var s="";i=0;
-        weather_mntemsadext.sort(function(a,b){return a.value-b.value});
-        weather_mntemsadextstr = "[Minimum temperature]　("+obsTime+")　　　";
-        var rank = 0;
+      rain_windData.mntemsadext00_rct.update();
+      weather_mntemsadext = [];
+      const weatherDataListCSV: string[][] = [];
+      const tmp = data.split("\n");
+      for (let j=0; j<tmp.length-1; j++) {
+        weatherDataListCSV[j] = tmp[j].split(',');
+      }
+      const obsTime = weatherDataListCSV[388][6]+"日"+weatherDataListCSV[388][7]+"時"+weatherDataListCSV[388][8]+"分現在";
+      for (let j=1; j<weatherDataListCSV.length; j++) {
+        const obj = {pref:"", name:"", value: 0};
+        obj.pref = weatherDataListCSV[j][1];
+        obj.name = weatherDataListCSV[j][2];
+        obj.value = Number(weatherDataListCSV[j][9]);
+        if(Number(weatherDataListCSV[j][10])>3)weather_mntemsadext.push(obj);
+        if(weather_prelist[4].indexOf(weatherDataListCSV[j][1])==-1)weather_prelist[4].push(weatherDataListCSV[j][1]);
+      }
+      weather_mntemsadext.sort(function(a,b){return a.value-b.value});
+      weather_mntemsadextstr = "[Minimum temperature]　("+obsTime+")　　　";
+      var rank = 0;
       let unit = (document.getElementsByName('unitTemp')[0] as HTMLSelectElement).value;
-        switch (unit) {
-          case "K":
-            for(let i=0; i<weather_mntemsadext.length; i++){
-              weather_mntemsadext[i].value += 273.15;
-            }
-            break;
-          case "℉":
-            for(let i=0; i<weather_mntemsadext.length; i++){
-              weather_mntemsadext[i].value = weather_mntemsadext[i].value * 1.8 + 32;
-              weather_mntemsadext[i].value = Math.round(weather_mntemsadext[i].value);
-            }
-            break;
-        }
-        for(var i=0; i<weather_mntemsadext.length; i++){
-          if(rank!=0)if(weather_mntemsadext[i].value != weather_mntemsadext[i-1].value)rank=i+1; else; else rank++;
-          if(i>20){
-            if(weather_mntemsadext[i].value!=weather_mntemsadext[i-1].value)break;
+      switch (unit) {
+        case "K":
+          for(let i=0; i<weather_mntemsadext.length; i++){
+            weather_mntemsadext[i].value += 273.15;
           }
-          weather_mntemsadextstr += rank+")"+weather_mntemsadext[i].pref+" "+weather_mntemsadext[i].name.replace(/（.{1,}）/, "")+" "+weather_mntemsadext[i].value+""+unit+"　　 ";
+          break;
+        case "℉":
+          for(let i=0; i<weather_mntemsadext.length; i++){
+            weather_mntemsadext[i].value = weather_mntemsadext[i].value * 1.8 + 32;
+            weather_mntemsadext[i].value = Math.round(weather_mntemsadext[i].value);
+          }
+          break;
+      }
+      for(let j=0; j<weather_mntemsadext.length; j++){
+        if(rank!=0)if(weather_mntemsadext[j].value != weather_mntemsadext[j-1].value)rank=j+1; else; else rank++;
+        if(j>20){
+          if(weather_mntemsadext[j].value!=weather_mntemsadext[j-1].value)break;
         }
+        weather_mntemsadextstr += rank+")"+weather_mntemsadext[j].pref+" "+weather_mntemsadext[j].name.replace(/（.{1,}）/, "")+" "+weather_mntemsadext[j].value+""+unit+"　　 ";
+      }
     } catch (error) {
       console.error("Loading Error (rain_windData mntemsadext00_rct)", error);
-      }
+    }
   }
 }
 rain_windData.pre1h00_rct = new TrafficTracker("JMA / 1時間降水量 最新");
@@ -2713,18 +2773,7 @@ rain_windData.mxwsp00_rct = new TrafficTracker("JMA / 最大風速 最新");
 rain_windData.mxtemsadext00_rct = new TrafficTracker("JMA / 最高気温 最新");
 rain_windData.mntemsadext00_rct = new TrafficTracker("JMA / 最低気温 最新");
 
-function forEach2(int,callbackfn){
-  var i = 0;
-  var u;
-  var re = [];
-  for(i=0; i<int.length; i++){
-      u = callbackfn(int[i],i);
-      if(u!==void(0))re.push(u);
-  }
-  if(re.length == 0) return i; else return re;
-}
-
-function notification(type, title, msg, id, priority){
+export function notification(type: string, title: string, msg: string, id: string, priority: number){
   switch (type) {
     case "create":
       chrome.notifications.create(id, {
@@ -2755,7 +2804,7 @@ function notification(type, title, msg, id, priority){
       break;
   }
 }
-function background_send(message){
+export function background_send(message: any){
   chrome.runtime.sendMessage(message);
 }
 
@@ -2895,7 +2944,7 @@ const getAmedasData = function(){
   });
 };
 getAmedasData.tracker = new TrafficTracker("JMA / アメダス");
-getAmedasData.ConvertDate = obj => `${obj.getFullYear()}${((obj.getMonth()+1)+"").padStart(2,"0")}${(obj.getDate()+"").padStart(2,"0")}${(obj.getHours()+"").padStart(2,"0")}${(obj.getMinutes()+"").padStart(2,"0")}`;
+getAmedasData.ConvertDate = (obj: Date) => `${obj.getFullYear()}${((obj.getMonth()+1)+"").padStart(2,"0")}${(obj.getDate()+"").padStart(2,"0")}${(obj.getHours()+"").padStart(2,"0")}${(obj.getMinutes()+"").padStart(2,"0")}`;
 getAmedasData.time = { min10: "?", min60: "?" };
 
 // warning: remove
@@ -2923,22 +2972,35 @@ const getEvacuationData = function(){
   xhrEvacuation.send();
 };
 
-var weatherlink = [];
+var weatherlink: string[] = [];
 //“台風(TY)”、“台風(STS)”、“台風(TS)”、“熱帯低気圧(TD)”、“ハリケーン(Hurricane)”、“発達した熱帯低気圧(Tropical Storm)”、“温帯低気圧(LOW)”
 // const JMA_logCheck = () => {}
-Element.prototype.fun1 = function(name, i=0){ return this.getElementsByTagName(name).item(i); };
-Element.prototype.fun2 = function(name, i=0){ return this.querySelectorAll(name).item(i) };
-NodeList.prototype.toArray = function(){ return Array.from(this) };
-function convertFullWidthToHalfWidth(str) {
-  return str.replace(/[０-９]/g, function(s) {
+declare global {
+  interface Element {
+    fun1(name: string, i?: number): Element | null;
+    fun2(name: string, i?: number): Element | null;
+  }
+  interface NodeList {
+    toArray(): Element[];
+  }
+}
+
+Element.prototype.fun1 = function(name: string, i = 0){ return this.getElementsByTagName(name).item(i); };
+Element.prototype.fun2 = function(name: string, i = 0){ return this.querySelectorAll(name).item(i); };
+NodeList.prototype.toArray = function(){ return Array.from(this) as Element[]; };
+export function convertFullWidthToHalfWidth(str: string) {
+  return str.replace(/[０-９]/g, function(s: string) {
     return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
   });
 }
 
-function parseRainfallData(text){
+type RainLocation = { name: string; rainfall: number; isApproximate: boolean; isOrMore: boolean };
+type RainRecord = { datetime: string; prefecture: string; locations: RainLocation[] };
+
+function parseRainfallData(text: string): RainRecord[] {
   const lines = text.trim().split('\n');
-  let currentData = { datetime: '', prefecture: '', locations: [] };
-  let results = [];
+  let currentData: RainRecord = { datetime: '', prefecture: '', locations: [] };
+  let results: RainRecord[] = [];
 
   for (let line of lines){
     line = zen2han(line);
@@ -2971,261 +3033,273 @@ function parseRainfallData(text){
 async function weatherInfo(){
   try {
     const data = await fetchXmlWithTimeout("https://www.data.jma.go.jp/developer/xml/feed/extra.xml", 15000, 'no-cache');
-      weatherInfo.tracker.update();
-      const performWeatherStartAt = performance.now() * 1000;
-      if (viewMode === 2 || viewMode === 1) return;
+    weatherInfo.tracker.update();
+    const performWeatherStartAt = performance.now() * 1000;
+    if (viewMode === 2 || viewMode === 1) return;
     const arr: string[] = [];
-      let isChange = true;
+    let isChange = true;
     for (const entry of Array.from(data.getElementsByTagName('entry'))){
       const linkAttrHref = entry.querySelector('link')?.getAttribute('href');
       const titleTextCotent = entry.querySelector('title')?.textContent ?? "";
       if (!linkAttrHref) continue;
-        if (weatherlink.indexOf(linkAttrHref) !== -1) isChange = false;
-        arr.push(linkAttrHref);
-        if (isChange && titleTextCotent !== "早期天候情報" && titleTextCotent !== "気象警報・注意報" && titleTextCotent !== "気象特別警報・警報・注意報"){
-          if (titleTextCotent == "土砂災害警戒情報" && q_startTime <= 300) isChange = false;
-          if (titleTextCotent == "指定河川洪水予報" && q_startTime <= 300) isChange = false;
+      if (weatherlink.indexOf(linkAttrHref) !== -1) isChange = false;
+      arr.push(linkAttrHref);
+      if (isChange && titleTextCotent !== "早期天候情報" && titleTextCotent !== "気象警報・注意報" && titleTextCotent !== "気象特別警報・警報・注意報"){
+        if (titleTextCotent == "土砂災害警戒情報" && q_startTime <= 300) isChange = false;
+        if (titleTextCotent == "指定河川洪水予報" && q_startTime <= 300) isChange = false;
+      }
+      const performWeatherLoadStartAt = performance.now() * 1000;
+      if (isChange){
+        if (titleTextCotent === "台風解析・予報情報（５日予報）（Ｈ３０）"){
+          // TODO: legacy handling placeholder
         }
-        const performWeatherLoadStartAt = performance.now() * 1000;
-        if (isChange){
-          if (titleTextCotent === "台風解析・予報情報（５日予報）（Ｈ３０）");
-          // GitHubの履歴にこれ書いてたやつあると思うからそこから引っ張ってきて（2023/08/15らへん）
-        }
-        if (q_startTime > 300 && isChange){
-          if (titleTextCotent === "気象警報・注意報（Ｈ２７）"){
+      }
+      if (q_startTime > 300 && isChange){
+        if (titleTextCotent === "気象警報・注意報（Ｈ２７）"){
           try {
             const xmlRoot = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
             const title = "気象警報・注意報 " + xmlRoot.querySelector('Body > Warning[type="気象警報・注意報（府県予報区等）"] > Item > Area > Name')?.textContent;
             for (const item1 of Array.from(xmlRoot.querySelector('Warning[type="気象警報・注意報（一次細分区域等）"]')?.getElementsByTagName("Item") ?? [])){
-              const alertPlace = AreaForecastLocalM.warn[item1.querySelector("Area > Code")?.textContent ?? ""];
-                  for (const item2 of Array.from(item1.getElementsByTagName("Kind"))){
+              const alertCode = item1.querySelector("Area > Code")?.textContent ?? "";
+              const alertPlace = (AreaForecastLocalM.warn as Record<string, string>)[alertCode] ?? "";
+              for (const item2 of Array.from(item1.getElementsByTagName("Kind"))){
                 const alertStatus = item2.getElementsByTagName("Status")?.[0]?.textContent;
-                    const lastAlertType = item2.querySelector("LastKind > Name")?.textContent;
-                    const alertType = item2.getElementsByTagName('Name')?.[0]?.textContent ?? "";
-                    if (alertStatus === "発表"){
-                      const mainText = "【 " + alertPlace + " 】 発表：" + alertType;
+                const lastAlertType = item2.querySelector("LastKind > Name")?.textContent;
+                const alertType = item2.getElementsByTagName('Name')?.[0]?.textContent ?? "";
+                if (alertStatus === "発表"){
+                  const mainText = "【 " + alertPlace + " 】 発表：" + alertType;
                   const nextKinds: string[] = [];
-                      for (const item3 of Array.from(item2.getElementsByTagName("NextKind"))){
+                  for (const item3 of Array.from(item2.getElementsByTagName("NextKind"))){
                     const sentence = item3.getElementsByTagName("Sentence")?.[0]?.textContent;
                     if (sentence) nextKinds.push(sentence);
-                      }
-                      if (!nextKinds.length) nextKinds.push("");
-                      for (const item3 of nextKinds) NewsOperator.add(title, item3, mainText);
-                    } else if (alertStatus === "特別警報から警報" || alertStatus === "特別警報から注意報"){
-                      NewsOperator.add(title, "", "【 " + alertPlace + " 】 " + lastAlertType + " から " + alertType + " へ切り替え");
-                    } else if (alertStatus === "警報から注意報"){
-                      NewsOperator.add(title, "", "【 " + alertPlace + " 】 解除：" + lastAlertType);
-                    } else if (alertStatus === "解除"){
-                      NewsOperator.add(title, "", "【 " + alertPlace + " 】 解除：" + alertType);
-                    }
                   }
+                  if (!nextKinds.length) nextKinds.push("");
+                  for (const item3 of nextKinds) NewsOperator.add(title, item3, mainText);
+                } else if (alertStatus === "特別警報から警報" || alertStatus === "特別警報から注意報"){
+                  NewsOperator.add(title, "", "【 " + alertPlace + " 】 " + lastAlertType + " から " + alertType + " へ切り替え");
+                } else if (alertStatus === "警報から注意報"){
+                  NewsOperator.add(title, "", "【 " + alertPlace + " 】 解除：" + lastAlertType);
+                } else if (alertStatus === "解除"){
+                  NewsOperator.add(title, "", "【 " + alertPlace + " 】 解除：" + alertType);
                 }
+              }
+            }
           } catch (error) {
             console.error("Loading Error (気象警報・注意報（Ｈ２７）)", error);
-              }
-          } else if (titleTextCotent === "気象警報・注意報（Ｒ０６）"){
-            // やる気を見せる
-          } else if (titleTextCotent === "竜巻注意情報"){
+          }
+        } else if (titleTextCotent === "気象警報・注意報（Ｒ０６）"){
+          // やる気を見せる
+        } else if (titleTextCotent === "竜巻注意情報"){
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const performWeatherLoadEndAt = performance.now() * 1000;
-                for (const item of c.querySelectorAll('Body > Warning[type="竜巻注意情報（一次細分区域等）"] > Item')){
-              if ((item.querySelector('Kind > Code')?.textContent ?? "0") - 0){
-                const area = AreaForecastLocalM.tornado[item.querySelector('Area > Code')?.textContent ?? ""];
+            const performWeatherLoadEndAt = performance.now() * 1000;
+            for (const item of c.querySelectorAll('Body > Warning[type="竜巻注意情報（一次細分区域等）"] > Item')){
+              if (Number(item.querySelector('Kind > Code')?.textContent ?? 0)){
+                const areaCode = item.querySelector('Area > Code')?.textContent ?? "";
+                const area = (AreaForecastLocalM.tornado as Record<string, string>)[areaCode] ?? "";
                 const title = c.querySelector('Head > Title')?.textContent + ((c.querySelector('Serial')?.textContent ?? "") === "1" ? "　発表中" : "　継続中" );
                 const description = c.querySelector('Head > Headline > Text')?.textContent ?? "";
-                    NewsOperator.add(title, description, area + "に竜巻注意情報が発表されています。");
-                  }
-                  SFXController.play(sounds.warning.Notice);
-                }
-                document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+                NewsOperator.add(title, description, area + "に竜巻注意情報が発表されています。");
+              }
+              SFXController.play(sounds.warning.Notice);
+            }
+            const dbPfWeather = document.getElementById("dbPfWeather");
+            if (dbPfWeather) dbPfWeather.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
           } catch (error) {
             console.error("Loading Error (竜巻注意情報)", error);
           }
-          } else if (titleTextCotent.search("記録的短時間大雨情報") !== -1){
+        } else if (titleTextCotent.search("記録的短時間大雨情報") !== -1){
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const performWeatherLoadEndAt = performance.now() * 1000;
+            const performWeatherLoadEndAt = performance.now() * 1000;
             if (c.querySelector('Headline > Information > Item > Kind > Condition')?.textContent !== "取消"){
-                  try {
+              try {
                 const text = c.querySelector("Headline > Text")?.textContent ?? "";
                 const dataParsed = parseRainfallData(text);
-                const areaen = AreaForecastLocalM.warning[c.querySelector("Headline Area > Code")?.textContent ?? ""]?.en_US;
+                const areaen = (AreaForecastLocalM.warning as Record<string, { ja_JP: string; en_US: string }>)[c.querySelector("Headline Area > Code")?.textContent ?? ""]?.en_US;
                 if (!dataParsed.length) throw new Error("Error occurred while parsing text.");
                 for (const current of dataParsed){
-                      const time = current.datetime;
-                      const areajp = current.prefecture;
-                      for (const event of current.locations){
-                        NewsOperator.add('【記録的短時間大雨情報】 ' + areajp + ' (' + time + ')', "", "　" + event.name + " " + event.rainfall + "mm/h" + (event.isOrMore ? " 以上" : "") + " （" + ((event.isApproximate || event.isOrMore) ? "解析結果" : "観測値") + "）　");
-                        NewsOperator.add('* Heavy Rain Observed * ' + areaen + ' (' + time + ')', "", "　" + (event.isOrMore ? "Over " : "") + event.rainfall + "mm/h (" + ((event.isApproximate || event.isOrMore) ? "Analysis" : "Observation") + ") at " + event.name + "　");
-                      }
-                    }
-                  } catch (e){
-                    console.error(e);
+                  const time = current.datetime;
+                  const areajp = current.prefecture;
+                  for (const event of current.locations){
+                    NewsOperator.add('【記録的短時間大雨情報】 ' + areajp + ' (' + time + ')', "", "　" + event.name + " " + event.rainfall + "mm/h" + (event.isOrMore ? " 以上" : "") + " （" + ((event.isApproximate || event.isOrMore) ? "解析結果" : "観測値") + "）　");
+                    NewsOperator.add('* Heavy Rain Observed * ' + areaen + ' (' + time + ')', "", "　" + (event.isOrMore ? "Over " : "") + event.rainfall + "mm/h (" + ((event.isApproximate || event.isOrMore) ? "Analysis" : "Observation") + ") at " + event.name + "　");
+                  }
+                }
+              } catch (e){
+                console.error(e);
                 const headTitle = c.querySelector('Report > Head > Title')?.textContent ?? "";
                 const headText = c.querySelector('Headline > Text')?.textContent ?? "";
                 NewsOperator.add('記録的短時間大雨情報', headTitle, headText);
                 NewsOperator.add('Heavy Rain Information', headTitle, headText);
-                  }
-                  if (elements.id.speechCheckboxVPOA50.checked) speechBase.start([
-                    { type: "wait", time: 1000 },
-                    { type: "path", speakerId: "speaker8", path: "VPOA50_issued" }
-                  ]);
-                  SFXController.play(sounds.warning.HeavyRain);
-                }
-                document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+              }
+              if (elements.id.speechCheckboxVPOA50.checked) speechBase.start([
+                { type: "wait", time: 1000 },
+                { type: "path", speakerId: "speaker8", path: "VPOA50_issued" }
+              ]);
+              SFXController.play(sounds.warning.HeavyRain);
+            }
+            const dbPfWeather2 = document.getElementById("dbPfWeather");
+            if (dbPfWeather2) {
+              dbPfWeather2.setAttribute("aria-label", "dbPfWeather");
+              dbPfWeather2.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+            }
           } catch (error) {
             console.error("Loading Error (記録的短時間大雨情報)", error);
-              }
-          } else if (titleTextCotent === "土砂災害警戒情報"){
+          }
+        } else if (titleTextCotent === "土砂災害警戒情報"){
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const performWeatherLoadEndAt = performance.now() * 1000;
+            const performWeatherLoadEndAt = performance.now() * 1000;
             if (c.querySelector('Headline > Information > Item > Kind > Condition')?.textContent === "解除"){
               NewsOperator.add('土砂災害警戒情報　解除', c.querySelector("Headline > Text")?.textContent, "<土砂災害警戒情報 解除>　対象地域：" + c.querySelector('TargetArea > Name')?.textContent);
-                  if (elements.id.speechCheckboxGround.checked) speechBase.start([
+              if (elements.id.speechCheckboxGround.checked) speechBase.start([
                 { type: "path", speakerId: "speaker8", path: "ground.area."+(c.querySelector('TargetArea > Code')?.textContent ?? "") },
-                    { type: "path", speakerId: "speaker8", path: "ground.clear" }
-                  ]);
-                } else {
-                  const headline = Array.from(c.querySelectorAll("Headline Item"));
-                  for (const item of headline){
+                { type: "path", speakerId: "speaker8", path: "ground.clear" }
+              ]);
+            } else {
+              const headline = Array.from(c.querySelectorAll("Headline Item"));
+              for (const item of headline){
                 const areatexts = [] as string[];
-                    let tekisutoooaaaaa = "";
-                    for (const area of item.querySelectorAll("Area > Name").toArray()){
+                let tekisutoooaaaaa = "";
+                for (const area of item.querySelectorAll("Area > Name").toArray()){
                   tekisutoooaaaaa += " "+(area.textContent ?? "");
-                      if (tekisutoooaaaaa.length > 45) areatexts.push(tekisutoooaaaaa), tekisutoooaaaaa = "";
-                    }
-                    if (tekisutoooaaaaa) areatexts.push(tekisutoooaaaaa);
+                  if (tekisutoooaaaaa.length > 45) areatexts.push(tekisutoooaaaaa), tekisutoooaaaaa = "";
+                }
+                if (tekisutoooaaaaa) areatexts.push(tekisutoooaaaaa);
                 const infoType = item.fun2("Kind > Condition")?.textContent ?? "";
                 for (const area of areatexts) NewsOperator.add('土砂災害警戒情報　' + (c.querySelector('TargetArea > Name')?.textContent ?? ""), c.querySelector('Headline > Text')?.textContent ?? "", "［"+infoType+"］"+area);
-                    if (infoType === "発表" && elements.id.speechCheckboxGround.checked) speechBase.start([
-                      { type: "wait", time: 500 },
+                if (infoType === "発表" && elements.id.speechCheckboxGround.checked) speechBase.start([
+                  { type: "wait", time: 500 },
                   { type: "path", speakerId: "speaker8", path: "ground.area."+(c.querySelector('TargetArea > Code')?.textContent ?? "") },
-                      { type: "path", speakerId: "speaker8", path: "ground.issue" }
-                    ]);
-                  }
-                  SFXController.play(sounds.warning.GroundLoosening);
-                }
-                document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+                  { type: "path", speakerId: "speaker8", path: "ground.issue" }
+                ]);
+              }
+              SFXController.play(sounds.warning.GroundLoosening);
+            }
+            const dbPfWeather2 = document.getElementById("dbPfWeather");
+            if (dbPfWeather2) dbPfWeather2.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
           } catch (error) {
             console.error("Loading Error (土砂災害警戒情報)", error);
-              }
-          } else if (titleTextCotent === "気象特別警報報知") {
+          }
+        } else if (titleTextCotent === "気象特別警報報知") {
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const performWeatherLoadEndAt = performance.now() * 1000;
+            const performWeatherLoadEndAt = performance.now() * 1000;
             if (c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Kind > Name')?.textContent !== "解除"){
-                  NewsOperator.add('特別警報を発表中', '', '発表中の地域では、重大な危険が差し迫った異常な状況');
-                  NewsOperator.add('Emergency weather warnings are in effect.', '', 'This is an extraordinary situation with serious potential for disaster conditions.');
-                  const prefInfo = c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area');
-                  for (const e2 of c.querySelectorAll('Head > Headline > Information[type="気象特別警報報知（市町村等）"] > Item')){
-                    NewsOperator.add(
-                      "【" + Array.from(e2.querySelectorAll('Kind > Name')).map(item => item.textContent).join("・") + "】",
-                  "", "［発表中］" + OfficeID2PrefName[prefInfo?.querySelector('Code')?.textContent ?? ""] + e2.querySelector('Areas > Area > Name')?.textContent
-                    );
-                  }
-                  if (elements.id.speechCheckboxSPwarn.checked) speechBase.start([
-                    { type: "wait", time: 3500 },
+              NewsOperator.add('特別警報を発表中', '', '発表中の地域では、重大な危険が差し迫った異常な状況');
+              NewsOperator.add('Emergency weather warnings are in effect.', '', 'This is an extraordinary situation with serious potential for disaster conditions.');
+              const prefInfo = c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area');
+              for (const e2 of c.querySelectorAll('Head > Headline > Information[type="気象特別警報報知（市町村等）"] > Item')){
+                const prefCode = prefInfo?.querySelector('Code')?.textContent ?? "";
+                const prefName = OfficeID2PrefName[prefCode as keyof typeof OfficeID2PrefName] ?? prefCode;
+                NewsOperator.add(
+                  "【" + Array.from(e2.querySelectorAll('Kind > Name')).map(item => item.textContent).join("・") + "】",
+                  "", "［発表中］" + prefName + (e2.querySelector('Areas > Area > Name')?.textContent ?? "")
+                );
+              }
+              if (elements.id.speechCheckboxSPwarn.checked) speechBase.start([
+                { type: "wait", time: 3500 },
                 { type: "path", speakerId: "speaker8", path: "warning.prefecture." + (prefInfo?.querySelector('Code')?.textContent ?? "") },
-                    { type: "path", speakerId: "speaker8", path: "warning.special_warn" }
-                  ]);
-                  SFXController.play(sounds.warning.Emergency);
-                } else {
+                { type: "path", speakerId: "speaker8", path: "warning.special_warn" }
+              ]);
+              SFXController.play(sounds.warning.Emergency);
+            } else {
               NewsOperator.add('特別警報は警報へ', '発表されていた特別警報は警報へ切り替えられましたが、引き続き最新情報にご注意ください。', '警報に切り替え：' + (c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area > Name')?.textContent ?? ""));
-                }
-                document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+            }
+            const dbPfWeather3 = document.getElementById("dbPfWeather");
+            if (dbPfWeather3) dbPfWeather3.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
           } catch (error) {
             console.error("Loading Error (気象特別警報報知)", error);
-              }
-          } else if (titleTextCotent === "指定河川洪水予報"){
+          }
+        } else if (titleTextCotent === "指定河川洪水予報"){
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const performWeatherLoadEndAt = performance.now() * 1000;
+            const performWeatherLoadEndAt = performance.now() * 1000;
             const level = Number(c.querySelector('Headline > Information[type="指定河川洪水予報（河川）"] Kind > Code')?.textContent ?? "0");
-                if (ifrange(level, 50, 51)){
-                  SFXController.play(sounds.warning.Flood5);
+            if (ifrange(level, 50, 51)){
+              SFXController.play(sounds.warning.Flood5);
               const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name')?.textContent;
               const riverTitle = "【 " + c.querySelector("Head > Title")?.textContent + " / 警戒レベル５相当 】";
               NewsOperator.add(riverTitle, c.querySelector('Head > Headline > Text')?.textContent, riverAreaName + "では、氾濫が発生した模様。");
-                  for (const c2 of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
+              for (const c2 of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
                 const type = c2.querySelector("Property > Type")?.textContent;
-                    switch (type){
-                    case "主文":
-                      if (c2.getElementsByTagName("Areas").length){
+                switch (type){
+                case "主文":
+                  if (c2.getElementsByTagName("Areas").length){
                     NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text")?.textContent, "対象の水位観測所： "+c2.querySelector("Areas > Area > Name")?.textContent+" "+c2.querySelector("Stations > Station > Name")?.textContent+"水位観測所 （"+c2.querySelector("Stations > Station > Location")?.textContent+"）");
-                      } else {
+                  } else {
                     NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text")?.textContent, riverAreaName + "で氾濫発生。すぐに安全の確保をしてください。");
-                      }
-                      break;
-                    case "浸水想定地区":
-                      for (const e2 of c2.querySelectorAll("Areas > Area")){
-                    const areaName = e2.getElementsByTagName("City")?.[0]?.textContent + e2.getElementsByTagName("Name")?.[0]?.textContent;
-                        NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
-                      }
-                      break;
-                    }
                   }
-                } else if(ifrange(level, 40, 41)){
-                  SFXController.play(sounds.warning.Flood4);
+                  break;
+                case "浸水想定地区":
+                  for (const e2 of c2.querySelectorAll("Areas > Area")){
+                    const areaName = e2.getElementsByTagName("City")?.[0]?.textContent + e2.getElementsByTagName("Name")?.[0]?.textContent;
+                    NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
+                  }
+                  break;
+                }
+              }
+            } else if(ifrange(level, 40, 41)){
+              SFXController.play(sounds.warning.Flood4);
               const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name')?.textContent;
               const riverTitle = "【 " + c.querySelector('Head > Title')?.textContent + " / 警戒レベル４相当 】";
               NewsOperator.add(riverTitle, c.querySelector('Headline > Text')?.textContent, "対象河川： " + riverAreaName);
-                  for (const e of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
+              for (const e of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
                 const type = e.querySelector("Property > Type")?.textContent;
-                    switch (type){
-                    case "主文":
+                switch (type){
+                case "主文":
                   NewsOperator.add(riverTitle, e.querySelector("Property > Text")?.textContent, "対象の水位観測所： " + e.querySelector("Areas > Area > Name")?.textContent + " " + e.querySelector("Stations > Station > Name")?.textContent + "水位観測所 （" + e.querySelector("Stations > Station > Location")?.textContent + "）");
-                      break;
-                    case "浸水想定地区":
-                      for (const e2 of e.querySelectorAll("Areas > Area")){
+                  break;
+                case "浸水想定地区":
+                  for (const e2 of e.querySelectorAll("Areas > Area")){
                     const areaName = e2.getElementsByTagName("City")?.[0]?.textContent + e2.getElementsByTagName("Name")?.[0]?.textContent;
-                        NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
-                      }
-                      break;
-                    }
+                    NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
                   }
+                  break;
                 }
-                elements.id.dbPfDrawing.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+              }
+            }
+            elements.id.dbPfDrawing.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
           } catch (error) {
             console.error("Loading Error (指定河川洪水予報)", error);
-              }
-          } else if (titleTextCotent === "全般台風情報"){
+          }
+        } else if (titleTextCotent === "全般台風情報"){
           try {
             const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
-                const texts = c.getElementsByTagName("Text");
+            const texts = c.getElementsByTagName("Text");
             const headcomment = (texts?.[0]?.textContent ?? "").replaceAll(/(\s){1,}/g,"　").trim().split("。").slice(0, -1).map(line => line + "。");
             let bodycomment = (texts?.[1]?.textContent ?? "").split("\n\n").map(text => text.replaceAll(/(\s){1,}/g,"　"));
-                if (bodycomment[0] === "なし") bodycomment = [""];
+            if (bodycomment[0] === "なし") bodycomment = [""];
             const title = c.querySelector("Head > Title")?.textContent;
-                for (const line of headcomment){
-                  NewsOperator.add(title, "全般台風情報　ヘッドライン", line);
-                }
-                for (const key in bodycomment) {
-                  const item = bodycomment[key];
-                  NewsOperator.add(title, item, "", {duration: item.length * 150});
-                }
+            for (const line of headcomment){
+              NewsOperator.add(title, "全般台風情報　ヘッドライン", line);
+            }
+            for (const key in bodycomment) {
+              const item = bodycomment[key];
+              NewsOperator.add(title, item, "", {duration: item.length * 150});
+            }
           } catch (error) {
             console.error("Loading Error (全般台風情報)", error);
-              }
           }
         }
+      }
     }
-      weatherlink = arr;
+    weatherlink = arr;
   } catch (error) {
     console.error("Loading Error (weatherInfo)", error);
-    }
+  }
 }
 weatherInfo.tracker = new TrafficTracker("JMA / 気象情報 一覧");
 
-function ifrange(n, e1, e2, cd=[0,0]){
+function ifrange(n: number, e1: number, e2: number, cd: [number, number]=[0,0]){
   let r1, r2;
   if(cd[0]===0)r1=(e1<=n);else r1=(e1<n);
   if(cd[1]===0)r2=(n<=e2);else r2=(n<e2);
   return r1&&r2;
 }
-function toFull(str){
-  return str.replace(/[A-Za-z0-9]/g, function(s) {
+function toFull(str: string){
+  return str.replace(/[A-Za-z0-9]/g, function(s: string) {
       return String.fromCharCode(s.charCodeAt(0) + 0xFEE0)
   }).replace(/</g, "［").replace(/>/g, "］");
 }
@@ -3235,8 +3309,8 @@ function viewQuake(){
   const isPreliminary = q_magnitude === "--";
   prepareQuakeState(quakeRenderState, isPreliminary);
   // 20231105 削除 カスタム地震情報
-  const magnitude_r_jp = {"-901": "不明", "-902": "8を超える巨大地震"};
-  const magnitude_r_en = {"-901": "unknown", "-902": "above 8"};
+  const magnitude_r_jp: Record<string, string> = {"-901": "不明", "-902": "8を超える巨大地震"};
+  const magnitude_r_en: Record<string, string> = {"-901": "unknown", "-902": "above 8"};
   if (!isPreliminary){
     quakeText[0] = q_timeDD+"日"+q_timeH+"時"+q_timeM+"分頃、最大震度"+shindoListJP[q_maxShindo]+"を観測する地震が発生しました。震源は"+q_epiName+"、地震の規模を示すマグニチュードは"+(magnitude_r_jp[q_magnitude] || q_magnitude);
     if (q_depth == "ごく浅い") quakeText[0] += "、震源は"+q_depth+"です。"; else quakeText[0] += "、震源の深さは"+q_depth+"kmです。";
@@ -3245,12 +3319,14 @@ function viewQuake(){
     quakeText[0] = "［震度速報］ "+q_timeDD+"日"+q_timeH+"時"+q_timeM+"分頃、最大震度"+shindoListJP[q_maxShindo]+"を観測する地震が発生しました。"+(multilingualQuake[0]?.[63] ?? "");
     quakeText[0] += "震源が沖の場合、津波が発生する恐れがあります。海岸から離れるようにしてください。";
   }
-  const ampm = (q_timeH-0) > 11 ? "PM" : "AM";
+  const hour = Number(q_timeH);
+  const minute = Number(q_timeM);
+  const ampm = hour > 11 ? "PM" : "AM";
   if (!isPreliminary){
-    quakeText[0] += "　　　　　　　" + ampm + " " + (q_timeH % 12) + ":" + q_timeM + " JST - A "+(magnitude_r_en[q_magnitude] || q_magnitude)+" magnitude earthquake with a maximum intensity of "+shindoListNHK[q_maxShindo]+" occurred. The epicenter was located in " + epicenter_list[1][q_epiIdx] + ", with a depth of ";
+    quakeText[0] += "　　　　　　　" + ampm + " " + (hour % 12) + ":" + minute + " JST - A "+(magnitude_r_en[q_magnitude] || q_magnitude)+" magnitude earthquake with a maximum intensity of "+shindoListNHK[q_maxShindo]+" occurred. The epicenter was located in " + epicenter_list[1][q_epiIdx] + ", with a depth of ";
     if(q_depth === "ごく浅い") quakeText[0] += "very shallow."; else quakeText[0] += q_depth+"km.";
   } else {
-    quakeText[0] += "　　　　　　　" + ampm + " " + (q_timeH % 12) + ":" + q_timeM + " JST - An earthquake with a maximum seismic intensity of "+shindoListNHK[q_maxShindo]+" occurred. Please pay attention to further information!";
+    quakeText[0] += "　　　　　　　" + ampm + " " + (hour % 12) + ":" + minute + " JST - An earthquake with a maximum seismic intensity of "+shindoListNHK[q_maxShindo]+" occurred. Please pay attention to further information!";
     if(q_maxShindo > 5){
       //mainText[0] = "震源が海底ですと、津波が発生する恐れがあります。海岸から離れるようにしてください。"
     }
@@ -3260,27 +3336,28 @@ function viewQuake(){
   textOffsetX = 1200;
   let titletext = "", windtext = "";
   if (!isPreliminary) titletext = "[地震情報](" + q_timeH + ":" + q_timeM + "頃発生) 震源地:" + q_epiName + " 最大震度:" + shindoListJP[q_maxShindo] + " M" + (magnitude_r_jp[q_magnitude] || q_magnitude) + " 深さ:" + ((q_depth == "ごく浅い")?q_depth:"約"+q_depth+"km"); else titletext = "＜震度速報＞　" + q_timeH + "時" + q_timeM + "分頃発生　最大震度" + shindoListJP[q_maxShindo];
-  document.getElementById("eiTitle").innerText = titletext;
-  document.getElementById("eiTitle").scrollLeft = 365;
-  document.getElementById("eiwind").innerText = "";
+  const eiTitle = document.getElementById("eiTitle") as HTMLDivElement;
+  const eiWind = document.getElementById("eiwind") as HTMLDivElement;
+  const setClipQuake = document.getElementById("setClipQuake") as HTMLInputElement;
+  eiTitle.innerText = titletext;
+  eiTitle.scrollLeft = 365;
+  eiWind.innerText = "";
   if (q_maxShindo == -1){
-    document.getElementById("eiTitle").innerText = "まだ情報は入っていません。";
-    document.getElementById("eiwind").innerText = "There is no information avilable.";
+    eiTitle.innerText = "まだ情報は入っていません。";
+    eiWind.innerText = "There is no information avilable.";
   } else {
     for (let i=10; i>0; i--){
       if (quakeText[i] != ""){
         windtext += "［震度" + toFull(shindoListJP[i]) + "］\n　" + ( (!isSokuho) ? (quakeText[i].replace(/　 </g, '\n　').slice(1)) : (quakeText[i].replace(/　 </g, '\n　')) ).replace(/> /g, '：') + "\n";
       }
     }
-    document.getElementById("eiwind").innerText = windtext;
-    if (document.getElementById("setClipQuake").checked) copyText(titletext + "\n\n" + windtext.replaceAll("<br>","\n"));
+    eiWind.innerText = windtext;
+    if (setClipQuake.checked) copyText(titletext + "\n\n" + windtext.replaceAll("<br>","\n"));
   }
 }
 
 var isSokuho = false;
 var lasteqlist = "";
-var num = 0;
-var l = [];
 /** 地震リストを取得 */
 function load_quake_list_v2(){
   load_quake_list_v2.lastCall = NaN;
@@ -3289,16 +3366,17 @@ function load_quake_list_v2(){
     load_quake_list_v2.lastCall = load_quake_list_v2.tracker.lastTime;
     const eqlist = JSON.stringify(data.quake) + quakeinfo_offset_cnt;
     // const magnitude_not_a_number = {"M不明": 1, "M8を超える巨大地震": 2, "Ｍ不明": 1, "Ｍ８を超える巨大地震": 2};
-    const earthquake_intensity_list_all = { "S1": '1', "S2": '2', "S3": '3', "S4": '4', "S5-": '5弱', "S5+": '5強', "S6-": '6弱', "S6+": '6強', "S7": '7', "LS5-": '5弱(推定)', "LS5+": '5強(推定)', "LS6-": '6弱(推定)', "LS6+": '6強(推定)', "LS7": '7(推定)' };
-    const earthquake_intensity_color_all = { "S1": '#f2f2ff', "S2": '#68c8fd', "S3": '#869ffd', "S4": '#fae696', "S5-": '#faf500', "S5+": '#febb6f', "S6-": '#ff2800', "S6+": '#a50021', "S7": '#b40068', "LS5-": '#faf500', "LS5+": '#febb6f', "LS6-": '#ff2800', "LS6+": '#a50021', "LS7": '#b40068' };
+    const earthquake_intensity_list_all: Record<string, string> = { "S1": '1', "S2": '2', "S3": '3', "S4": '4', "S5-": '5弱', "S5+": '5強', "S6-": '6弱', "S6+": '6強', "S7": '7', "LS5-": '5弱(推定)', "LS5+": '5強(推定)', "LS6-": '6弱(推定)', "LS6+": '6強(推定)', "LS7": '7(推定)' };
+    const earthquake_intensity_color_all: Record<string, string> = { "S1": '#f2f2ff', "S2": '#68c8fd', "S3": '#869ffd', "S4": '#fae696', "S5-": '#faf500', "S5+": '#febb6f', "S6-": '#ff2800', "S6+": '#a50021', "S7": '#b40068', "LS5-": '#faf500', "LS5+": '#febb6f', "LS6-": '#ff2800', "LS6+": '#a50021', "LS7": '#b40068' };
     let quakeinfo_list_html = "";
     if(lasteqlist !== eqlist){
-      data.quake.forEach((c2, num) => {
+      data.quake.forEach((c2: any, num: number) => {
         const event_date = new Date(c2.event_date);
         quakeinfo_list_html += '<button type="button" data-e=' + num;
         quakeinfo_list_html += ' name="elo' + num + '" id="el' + c2.event_id;
         quakeinfo_list_html += '" style="background-color:';
-        quakeinfo_list_html += earthquake_intensity_color_all[c2.max_shindo] || "#ffffff";
+        const intensityColor = earthquake_intensity_color_all[c2.max_shindo as keyof typeof earthquake_intensity_color_all] || "#ffffff";
+        quakeinfo_list_html += intensityColor;
         quakeinfo_list_html += '; color:';
         quakeinfo_list_html += /* (c2.max_shindo=="S3" || Number(c2.max_shindo.slice(1,2))>6) ? "#fff" : */"#000";
         quakeinfo_list_html += '; ';
@@ -3306,23 +3384,25 @@ function load_quake_list_v2(){
         quakeinfo_list_html += '" class="eiList-button">';
         if (c2.hypocenter.name === "") quakeinfo_list_html += '<span style="color:#fff; background-color:#000 padding:2px;">　';
         quakeinfo_list_html += c2.hypocenter.name === "" ? "震源未確定" : c2.hypocenter.name;
-        quakeinfo_list_html += '　最大震度' + earthquake_intensity_list_all[c2.max_shindo];
+        quakeinfo_list_html += '　最大震度' + earthquake_intensity_list_all[c2.max_shindo as keyof typeof earthquake_intensity_list_all];
         quakeinfo_list_html += '　' + event_date.getDate() + "日" + event_date.getHours() + "時" + event_date.getMinutes() + "分頃発生";
         if (c2.hypocenter.name === "") quakeinfo_list_html += "　</span>";
         quakeinfo_list_html += '</button>';
       });
-      document.getElementById("eiList").innerHTML = quakeinfo_list_html;
-      forEach2(document.getElementsByClassName("eiList-button"), function(c, i){
+      (document.getElementById("eiList") as HTMLDivElement).innerHTML = quakeinfo_list_html;
+      Array.from(document.getElementsByClassName("eiList-button")).forEach(c => {
         c.addEventListener("click", function(e){
-          const itemOffset = e.currentTarget.getAttribute("data-e") - 0;
+          const target = e.currentTarget as HTMLElement;
+          const itemAttr = target.getAttribute("data-e");
+          const itemOffset = itemAttr ? Number(itemAttr) : NaN;
           if (itemOffset !== quakeinfo_offset_cnt){
             quakeinfo_offset_cnt = itemOffset;
             quakesContainer.view();
           }
           console.log(
-            e.currentTarget.getAttribute("id"),
-            e.currentTarget.getAttribute("name").slice(3) - 0,
-            earthquakes_log.hasOwnProperty(e.currentTarget.getAttribute("id").slice(2))
+            target.getAttribute("id"),
+            Number(target.getAttribute("name")?.slice(3)),
+            earthquakes_log.hasOwnProperty(target.getAttribute("id")?.slice(2) ?? "")
           );
           load_quake_list_v2();
         });
@@ -3345,7 +3425,7 @@ var earthquake_latest_identifier = "";
  * 地震のイベントを取得
  * @param {String} event_id イベントID
  */
-function load_quake_event_v2(event_id){
+function load_quake_event_v2(event_id: string){
   fetch(RequestURL.nhkQuake2.replace("{event_id}", event_id)+"?_="+Date.now()).then(res => {
     load_quake_event_v2.tracker.update();
     const identifier = event_id + res.headers.get("last-modified");
@@ -3359,25 +3439,25 @@ function load_quake_event_v2(event_id){
     }
   }).then(data => {
     if (data){
-      const magnitude_not_a_number = {"M不明": "-901", "M8を超える巨大地震": "-902", "Ｍ不明": "-901", "Ｍ８を超える巨大地震": "-902"};
-      const earthquake_intensity_list_all = { "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5-": 6, "S5+": 7, "S6-": 8, "S6+": 9, "S7": 10 };
+      const magnitude_not_a_number: Record<string, string> = {"M不明": "-901", "M8を超える巨大地震": "-902", "Ｍ不明": "-901", "Ｍ８を超える巨大地震": "-902"};
+      const earthquake_intensity_list_all: Record<string, number> = { "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5-": 6, "S5+": 7, "S6-": 8, "S6+": 9, "S7": 10 };
       const event_date = new Date(data.event_date);
       const last_magnitude = q_magnitude;
-      q_timeYY = event_date.getFullYear();
+      q_timeYY = "0" + event_date.getFullYear();
       q_timeMM = ("0" + (event_date.getMonth() + 1)).slice(-2);
       q_timeDD = ("0" + event_date.getDate()).slice(-2);
       q_timeH = ("0" + event_date.getHours()).slice(-2);
       q_timeM = ("0" + event_date.getMinutes()).slice(-2);
       q_timeAll = q_timeYY + "-" + q_timeMM + "-" + q_timeDD + " " + q_timeH + ":" + q_timeM;
 
-      q_maxShindo = earthquake_intensity_list_all[data.max_shindo];
+      q_maxShindo = earthquake_intensity_list_all[data.max_shindo as keyof typeof earthquake_intensity_list_all];
       q_currentShindo = q_maxShindo;
       q_msiText = shindoListJP[q_maxShindo];
       isSokuho = data.sokuho === "1";
 
       if (data.hypocenter.code){
         q_epiIdx = epicenter_list[12].indexOf(data.hypocenter.code);
-        q_magnitude = magnitude_not_a_number[data.magnitude] || data.magnitude;
+        q_magnitude = magnitude_not_a_number[data.magnitude as keyof typeof magnitude_not_a_number] || data.magnitude;
         q_depth = data.depth;
         if(q_depth === "0") q_depth = "ごく浅い";
         q_epiName = data.hypocenter.name;
@@ -3391,10 +3471,11 @@ function load_quake_event_v2(event_id){
       }
 
       quakeText = ["","","","","","","","","","",""];
-      for (let key in earthquake_intensity_list_all){
-        if(data.hasOwnProperty(key)){
-          quakeText[earthquake_intensity_list_all[key]] = data[key].pref.map(pref => {
-            return (isSokuho ? "" : "<"+pref.name+"> ") + pref.uid_list.map(city => city.name).join(" ");
+      for (const key of Object.keys(earthquake_intensity_list_all)){
+        if (Object.hasOwn(data, key)){
+          const intensityIndex = earthquake_intensity_list_all[key];
+          quakeText[intensityIndex] = data[key].pref.map((pref: { name: string; uid_list: { name: string }[] }) => {
+            return (isSokuho ? "" : "<"+pref.name+"> ") + pref.uid_list.map((city: { name: string }) => city.name).join(" ");
           }).join("　 ");
         }
       }
@@ -3402,10 +3483,16 @@ function load_quake_event_v2(event_id){
 
       // 初回起動時判定
       if (last_magnitude){
-        viewQuake(0);
+        viewQuake();
         // if(Number(document.getElementsByName("minint")[0].value)<=q_maxShindo && ((Number(document.getElementsByName("minmag")[0].value)<=Number(q_magnitude) && Number(document.getElementsByName("depmin")[0].value)>=Number(q_depth=="ごく浅い"?0:q_depth))||q_magnitude=="--")){
-          SFXController.volume(sounds.quake[elements.class.sound_quake_type[q_maxShindo - 1].getAttribute("data-type")], elements.class.sound_quake_volume[q_maxShindo - 1].value / 100);
-          SFXController.play(sounds.quake[elements.class.sound_quake_type[q_maxShindo - 1].getAttribute("data-type")]);
+          const soundType = elements.class.sound_quake_type[q_maxShindo - 1]?.getAttribute("data-type") as keyof typeof sounds.quake | null;
+          const soundVolume = elements.class.sound_quake_volume[q_maxShindo - 1]?.value;
+          if (soundType && soundVolume) {
+            const soundKey: keyof typeof sounds.quake = soundType;
+            const volumeValue = Number(soundVolume) / 100;
+            SFXController.volume(sounds.quake[soundKey], volumeValue);
+            SFXController.play(sounds.quake[soundKey]);
+          }
         // }
       }
       quakesContainer.hide();
@@ -3428,21 +3515,19 @@ function load_quake_event_v2(event_id){
 load_quake_event_v2.tracker = new TrafficTracker("NHK / 地震情報イベント");
 
 const SFXController = {
-  play: soundData => {
+  play: (soundData: any) => {
     if (!soundData) return;
     if (!soundData.canPlay) soundData.audioEndedEvent();
     soundData.buffer.start(0);
     soundData.canPlay = false;
   },
-  volume: (soundData, volume) => {
+  volume: (soundData: any, volume: number) => {
     if (!soundData) return;
-    soundData.gain.gain.value = volume - 0;
+    soundData.gain.gain.value = volume;
   }
 };
 
-var lastp2p = "";
 var p2p_elapsedTime = 2405;
-var datakey="",datacount=0;
 function humanReadable(){}
 
 DataOperator.tsunami.onUpdate = (data, vtse41, vtse51) => {
@@ -3455,7 +3540,8 @@ DataOperator.tsunami.onUpdate = (data, vtse41, vtse51) => {
       defaultText: "津波の情報はまだ入っていません。\nThere is no information available."
     });
     if (vtse41){
-      SFXController.play(sounds.tsunami[["", "watch", "notice", "warning", "majorwarning"][DataOperator.tsunami.warnLevel]]);
+      const warnKey = (["", "watch", "notice", "warning", "majorwarning"][DataOperator.tsunami.warnLevel] ?? "") as keyof typeof sounds.tsunami;
+      if (warnKey && sounds.tsunami[warnKey]) SFXController.play(sounds.tsunami[warnKey]);
       const warnLevelStr = ["", "津波予報", "津波注意報", "津波警報", "大津波警報"][DataOperator.tsunami.warnLevel];
       NewsOperator.add(warnLevelStr, "", "津波予報が更新されました。", { duration: 8000 });
       for (const text of DataOperator.tsunami.text.forecast_news){
@@ -3492,7 +3578,7 @@ DataOperator.warn_current.onUpdate = data => {
   commandShortcuts[60] = data;
 };
 
-function quakeTemplateView(viewId){
+function quakeTemplateView(viewId: number){
   //siHtem = Number(document.getElementById("template").options[document.getElementById("template").selectedIndex].value);
   textOffsetX = 1200;
   if(viewId == 1){
@@ -3724,24 +3810,22 @@ function quakeTemplateView(viewId){
   q_timeAll = q_timeYY + "-" + q_timeMM + "-" + q_timeDD + " " + q_timeH + ":" + q_timeM;
 }
 
-var quakesContainer;
-!function(e){
-  quakesContainer = e();
-}(function(){
-  let em = document.querySelector("div.eiListCover");
-  let r = {
+let quakesContainer: { view: () => void; hide: () => void };
+(() => {
+  const em = document.querySelector<HTMLDivElement>("div.eiListCover");
+  const r = {
     view: function(){
-      em.style.visibility = "visible";
+      if (em) em.style.visibility = "visible";
     },
     hide: function(){
-      em.style.visibility = "hidden";
+      if (em) em.style.visibility = "hidden";
     }
   };
   r.hide();
-  return r;
-});
+  quakesContainer = r;
+})();
 
-function modeChange(num){
+export function modeChange(num: number){
   console.log(num);
   switch (num) {
     case 0:
@@ -3761,8 +3845,8 @@ function modeChange(num){
   Routines.isDrawNormalTitle = true;
 }
 
-function zen2han(str) {
-  return str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(s) {
+function zen2han(str: string) {
+  return str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(s: string) {
     return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
   });
 }
@@ -3774,10 +3858,10 @@ function zen2han(str) {
  * @param {Array[number]} a offset
  * @returns {string|object|number}
  */
-function getFormattedDate(p, f, d, a){
+function getFormattedDate(p: number, f: boolean, d?: Date, a?: number[]){
   if(!d) d = new Date();
-  if(!f) f = 0;
-  if(!p) p = 0;
+  if(f === undefined) f = false;
+  if(p === undefined) p = 0;
   if(a){
     if(a.length == 6 && (a instanceof Array)){
       d.setFullYear(d.getFullYear() + a[0]);
@@ -3806,13 +3890,13 @@ function getFormattedDate(p, f, d, a){
       return year+'/'+month+'/'+date+' '+Number(hour)+':'+min+':'+sec;
   }
 }
-function copyText(text) {
+function copyText(text: string) {
   navigator.clipboard.writeText(text);
 }
 
-const byteToString = byte => {
+export const byteToString = (byte: bigint | number) => {
   byte = BigInt(byte);
-  let table = [
+  const table: Array<[bigint, bigint, string]> = [
     [1n, 1n, "B"],
     [1024n, 1024n, "KiB"],
     [1048576n, 1024n, "MiB"],
@@ -3822,7 +3906,7 @@ const byteToString = byte => {
     [1152921504606846976n, 1024n, "EiB"],
     [1180591620717411303424n, 1024n, "ZiB"],
     [1208925819614629174706176n, 1024n, "YiB"],
-    [1237940039285380274899124224n, 0n]
+    [1237940039285380274899124224n, 1n, "YiB+"]
   ];
   let out = "";
   for (let item of table){
@@ -3839,7 +3923,7 @@ const byteToString = byte => {
 
   // Chromeストレージ（設定）
   await new Promise(resolve => {
-    chrome.storage.sync.get(['mode0', 'mode3', 'settings', 'app'], data => {
+    chrome.storage.sync.get(['mode0', 'mode3', 'settings', 'app'], (data: any) => {
       let isSaveForced = false;
       let currentVerID = AppVersionHistory.indexOf(data.app.lastVer);
       // Release note: 必ず追加すること
@@ -3861,97 +3945,113 @@ const byteToString = byte => {
       data.settings.volume.hvra ??= 100
       data.settings.volume.fldoc5 ??= 100
       data.settings.volume.fldoc4 ??= 100
-      document.getElementById('message1').value = data.mode0.main[0];
-      document.getElementById('message2').value = data.mode0.main[1];
-      document.getElementById('message3').value = data.mode0.main[2];
-      document.getElementById('message4').value = data.mode0.main[3];
-      document.getElementById('message5').value = data.mode0.main[4];
-      document.getElementById('title1').value = data.mode0.title[0];
-      document.getElementById('title2').value = data.mode0.title[1];
-      document.getElementById('title3').value = data.mode0.title[2];
-      document.getElementById('title4').value = data.mode0.title[3];
-      document.getElementById('title5').value = data.mode0.title[4];
-      document.getElementById('BNtitle').value = data.mode3[0];
-      document.getElementById('BNtext1').value = data.mode3[1];
-      document.getElementById('BNtext2').value = data.mode3[2];
+      const setInputValue = (id: string, value: string | number) => {
+        const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (el) el.value = String(value);
+      };
+      const setCheckbox = (id: string, value: boolean) => {
+        const el = document.getElementById(id) as HTMLInputElement | null;
+        if (el) el.checked = value;
+      };
+      setInputValue('message1', data.mode0.main[0]);
+      setInputValue('message2', data.mode0.main[1]);
+      setInputValue('message3', data.mode0.main[2]);
+      setInputValue('message4', data.mode0.main[3]);
+      setInputValue('message5', data.mode0.main[4]);
+      setInputValue('title1', data.mode0.title[0]);
+      setInputValue('title2', data.mode0.title[1]);
+      setInputValue('title3', data.mode0.title[2]);
+      setInputValue('title4', data.mode0.title[3]);
+      setInputValue('title5', data.mode0.title[4]);
+      setInputValue('BNtitle', data.mode3[0]);
+      setInputValue('BNtext1', data.mode3[1]);
+      setInputValue('BNtext2', data.mode3[2]);
       changeTextSpeed(data.settings?.tickerSpeed ?? 5);
-      document.getElementById('isSoraview').checked = data.settings.soraview;
-      document.getElementById('setClipEEW').checked = data.settings.clipboard.eew;
-      document.getElementById('setClipQuake').checked = data.settings.clipboard.quake;
-      document.getElementById('setIntervalIedred').value = data.settings.interval.iedred7584EEW;
-      document.getElementById('setIntervalNHKquake').value = data.settings.interval.nhkQuake;
-      document.getElementById('setIntervalJmaWt').value = data.settings.interval.jmaDevFeed;
-      document.getElementById('setIntervalTenkiJpTsu').value = data.settings.interval.tenkiJPtsunami;
-      document.getElementById('setIntervalTyphCom').value = data.settings.interval?.typhComment ?? 30000;
-      document.getElementById('setIntervalWarn').value = data.settings.interval?.warnInfo ?? 15000;
-      document.getElementById('setIntervalWNImscale').value = data.settings.interval.wniMScale;
-      document.getElementById('setIntervalWNIsorabtn').value = data.settings.interval.wniSorabtn;
-      document.getElementById('setIntervalWNIriver').value = data.settings.interval.wniRiver;
-      document.getElementById('volEEWl1').value = data.settings.volume.eewL[0];
-      document.getElementById('volEEWl5').value = data.settings.volume.eewL[1];
-      document.getElementById('volEEWl9').value = data.settings.volume.eewL[2];
-      document.getElementById('volEEWh').value = data.settings.volume.eewH;
-      document.getElementById('volEEWc').value = data.settings.volume.eewC;
-      document.getElementById('volEEWp').value = data.settings.volume.eewP;
-      document.getElementById('volGL').value = data.settings.volume.gl;
-      document.getElementById('volNtc').value = data.settings.volume.ntc;
-      document.getElementById('volSpW').value = data.settings.volume.spW;
-      document.getElementById('volTnm').value = data.settings.volume.tnm;
-      document.getElementById('volHvRa').value = data.settings.volume.hvra;
-      document.getElementById('volFldOc5').value = data.settings.volume.fldoc5;
-      document.getElementById('volFldOc4').value = data.settings.volume.fldoc4;
+      setCheckbox('isSoraview', data.settings.soraview);
+      setCheckbox('setClipEEW', data.settings.clipboard.eew);
+      setCheckbox('setClipQuake', data.settings.clipboard.quake);
+      setInputValue('setIntervalIedred', data.settings.interval.iedred7584EEW);
+      setInputValue('setIntervalNHKquake', data.settings.interval.nhkQuake);
+      setInputValue('setIntervalJmaWt', data.settings.interval.jmaDevFeed);
+      setInputValue('setIntervalTenkiJpTsu', data.settings.interval.tenkiJPtsunami);
+      setInputValue('setIntervalTyphCom', data.settings.interval?.typhComment ?? 30000);
+      setInputValue('setIntervalWarn', data.settings.interval?.warnInfo ?? 15000);
+      setInputValue('setIntervalWNImscale', data.settings.interval.wniMScale);
+      setInputValue('setIntervalWNIsorabtn', data.settings.interval.wniSorabtn);
+      setInputValue('setIntervalWNIriver', data.settings.interval.wniRiver);
+      setInputValue('volEEWl1', data.settings.volume.eewL[0]);
+      setInputValue('volEEWl5', data.settings.volume.eewL[1]);
+      setInputValue('volEEWl9', data.settings.volume.eewL[2]);
+      setInputValue('volEEWh', data.settings.volume.eewH);
+      setInputValue('volEEWc', data.settings.volume.eewC);
+      setInputValue('volEEWp', data.settings.volume.eewP);
+      setInputValue('volGL', data.settings.volume.gl);
+      setInputValue('volNtc', data.settings.volume.ntc);
+      setInputValue('volSpW', data.settings.volume.spW);
+      setInputValue('volTnm', data.settings.volume.tnm);
+      setInputValue('volHvRa', data.settings.volume.hvra);
+      setInputValue('volFldOc5', data.settings.volume.fldoc5);
+      setInputValue('volFldOc4', data.settings.volume.fldoc4);
 
-      document.getElementById("speech-vol-input").value = data.settings?.speech?.volume ?? 1;
-      document.getElementById("speech-checkbox-eew").checked = data.settings?.speech?.options?.EEW ?? true;
-      document.getElementById("speech-checkbox-quake").checked = data.settings?.speech?.options?.Quake ?? true;
-      document.getElementById("speech-checkbox-vpoa50").checked = data.settings?.speech?.options?.VPOA50 ?? true;
-      document.getElementById("speech-checkbox-ground").checked = data.settings?.speech?.options?.Ground ?? true;
-      document.getElementById("speech-checkbox-specialwarn").checked = data.settings?.speech?.options?.SPwarn ?? true;
+      elements.id.speechVolInput.value = String(data.settings?.speech?.volume ?? 1);
+      elements.id.speechCheckboxEEW.checked = data.settings?.speech?.options?.EEW ?? true;
+      elements.id.speechCheckboxQuake.checked = data.settings?.speech?.options?.Quake ?? true;
+      elements.id.speechCheckboxVPOA50.checked = data.settings?.speech?.options?.VPOA50 ?? true;
+      elements.id.speechCheckboxGround.checked = data.settings?.speech?.options?.Ground ?? true;
+      elements.id.speechCheckboxSPwarn.checked = data.settings?.speech?.options?.SPwarn ?? true;
 
-      t_viewType = (document.getElementById("viewTsunamiType").value = data.settings.viewTsunamiType || "1") - 0;
+      const viewTsunamiType = document.getElementById("viewTsunamiType") as HTMLSelectElement;
+      viewTsunamiType.value = data.settings.viewTsunamiType || "1";
+      t_viewType = Number(viewTsunamiType.value);
 
       elements.id.speechVolView.textContent = (data.settings?.speech?.volume ?? 1) * 100 + "%";
-      document.getElementsByName("themeColors")[0].value = data.settings?.theme?.color ?? 0;
+      (document.getElementsByName("themeColors")[0] as HTMLInputElement).value = String(data.settings?.theme?.color ?? 0);
       if (data.settings.volume.quake){
-        data.settings.volume.quake.forEach((item, i) => {
-          document.getElementsByClassName("sound_quake_volume")[i].value = item.volume;
-          document.getElementsByClassName("sound_quake_type")[i].setAttribute("data-type", item.type);
+        data.settings.volume.quake.forEach((item: { volume: number; type: string }, i: number) => {
+          const volumeInput = elements.class.sound_quake_volume[i];
+          const typeCell = elements.class.sound_quake_type[i];
+          if (volumeInput) volumeInput.value = String(item.volume);
+          if (typeCell) typeCell.setAttribute("data-type", item.type);
         });
       }
       colorThemeMode = data.settings?.theme?.color ?? 0;
       audioAPI.setGainTimer(data.settings?.gainPrograms ?? []);
 
       if(isSaveForced) savedata();
-      isSoraview = data.settings.soraview;
+      sorabtnState.isSoraview = data.settings.soraview;
       audioAPI.gainNode.gain.value = data.settings.volume.eewH / 100;
       document.addEventListener("DOMContentLoaded", () => {
         // console.log("DOMContentLoaded");
         reflectNormalMsg();
       });
-      resolve();
+      resolve(undefined);
     });
   });
 
-  const audioEndedEvent = function (){
-    console.log(this.buffer);
+  const isSoundLeaf = (value: SoundLeaf | SoundTree): value is SoundLeaf => {
+    return Object.hasOwn(value, "_src");
+  };
+  const audioEndedEvent = function (this: SoundLeaf){
+    if (!this.buffer || !this.gain || !this.audioData) return;
     this.buffer.disconnect(this.gain);
-    const bufferSource = audioAPI.context.createBufferSource();
+    const bufferSource = audioAPI.context.createBufferSource() as UUIDAudioBufferSourceNode;
     bufferSource.buffer = this.audioData;
     bufferSource.loop = false;
     bufferSource.connect(this.gain);
     bufferSource.uuid = crypto.randomUUID();
-    (this).canPlay = true;
-    (this).buffer = bufferSource;
+    this.canPlay = true;
+    this.buffer = bufferSource;
   };
-  const propLoop = async (parent, propName) => {
-    const target = parent[propName];
-    if (!Object.hasOwn(target, "_src")){
-      for (const item of Object.keys(target)) propLoop(target, item);
+  const propLoop = async (parent: Record<string, any>, propName: string): Promise<void> => {
+    const target = parent[propName] as SoundLeaf | SoundTree | undefined;
+    if (!target) return;
+    if (!isSoundLeaf(target)){
+      for (const item of Object.keys(target)) await propLoop(target as SoundTree, item);
     } else {
       try {
         const bufferData = await fetch(target._src).then(res => res.arrayBuffer());
         const decodedAudio = await audioAPI.context.decodeAudioData(bufferData);
-        const bufferSource = audioAPI.context.createBufferSource();
+        const bufferSource = audioAPI.context.createBufferSource() as UUIDAudioBufferSourceNode;
         const gainNode = audioAPI.context.createGain();
         bufferSource.buffer = decodedAudio;
         bufferSource.loop = false;
@@ -3959,7 +4059,7 @@ const byteToString = byte => {
         bufferSource.uuid = crypto.randomUUID();
         gainNode.gain.value = target._defaultGain ?? 1;
         gainNode.connect(audioAPI.masterGain);
-        parent[propName] = {audioData: decodedAudio, buffer: bufferSource, gain: gainNode, audioEndedEvent, canPlay: true };
+        parent[propName] = { _src: target._src, audioData: decodedAudio, buffer: bufferSource, gain: gainNode, audioEndedEvent, canPlay: true };
       } catch (e) {
         console.dir(e);
         delete parent[propName];
@@ -3981,14 +4081,14 @@ const byteToString = byte => {
   sounds.warning.HeavyRain._defaultGain = elements.id.volHvRa.valueAsNumber / 100;
   sounds.warning.Flood4._defaultGain = elements.id.volFldOc4.valueAsNumber / 100;
   sounds.warning.Flood5._defaultGain = elements.id.volFldOc5.valueAsNumber / 100;
-  for (const item of Object.keys(sounds)) propLoop(sounds, item);
+  await Promise.all(Object.keys(sounds).map(item => propLoop(sounds, item)));
 
   setInterval(Routines.main, 20);
   errorCollector.displayError = false;
 
   speechBase.addSpeaker(new AudioSpeaker("speaker21", "剣崎雌雄", "male", SpeechVersionData["speaker21"], false));
   speechBase.addSpeaker(new AudioSpeaker("speaker16", "九州そら", "female", SpeechVersionData["speaker16"], false));
-  speechBase.addSpeaker(new AudioSpeaker("speaker8", "春日部つむぎ", "female", SpeechVersionData["speaker8"]));
+  speechBase.addSpeaker(new AudioSpeaker("speaker8", "春日部つむぎ", "female", SpeechVersionData["speaker8"], false));
   /** EEWモードかの判別 */
   speechBase.userSpace.isEewMode = false;
   speechBase.userSpace.speakerId = "speaker8";
@@ -3999,7 +4099,7 @@ const byteToString = byte => {
     depth: "",
     epicenterId: ""
   };
-  speechBase.addEventListener("speechStatus", event => {
+  speechBase.addEventListener("speechStatus", (event: CustomEvent<any>) => {
     const code = event.detail.code;
     switch (code) {
       case speechBase.speechStatus.START_INIT:
@@ -4020,7 +4120,7 @@ const byteToString = byte => {
         break;
     }
   });
-  speechBase.addEventListener("volumeInput", event => {
+  speechBase.addEventListener("volumeInput", (event: CustomEvent<{ value: number }>) => {
     elements.id.speechVolView.textContent = (100 * event.detail.value).toFixed() + "%";
   });
   await speechBase.init(audioAPI.context, audioAPI.masterGain);
@@ -4030,21 +4130,40 @@ const byteToString = byte => {
   // test.test();
 })();
 
-function changeTextSpeed (value){
-  const output = document.getElementById("speedResult");
-  const slider = document.getElementById("speedVal");
+function changeTextSpeed (value?: number){
+  const output = document.getElementById("speedResult") as HTMLInputElement;
+  const slider = document.getElementById("speedVal") as HTMLInputElement;
   if (value !== undefined){
-    slider.value = value;
-  } else {
-    value = slider.value;
+    slider.value = String(value);
   }
-  textSpeed = value - 0;
+  const newValue = value !== undefined ? value : Number(slider.value);
+  textSpeed = newValue - 0;
   output.value = textSpeed.toFixed(1);
-  const ratio = (value - slider.min) / (slider.max - slider.min) * 100;
+  const ratio = (newValue - Number(slider.min)) / (Number(slider.max) - Number(slider.min)) * 100;
   slider.style.background = `linear-gradient(90deg, #377494 ${ratio}%, #dddddd ${ratio}%)`;
 }
 
 // イベント類
+const getInputEl = (id: string) => document.getElementById(id) as HTMLInputElement | null;
+const addClickListener = (id: string, listener: () => void) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener("click", listener);
+};
+const addInputListener = (id: string, listener: (target: HTMLInputElement, ev: Event) => void) => {
+  const el = getInputEl(id);
+  if (!el) return;
+  el.addEventListener("input", ev => {
+    const target = ev.target as HTMLInputElement | null;
+    if (!target) return;
+    listener(target, ev);
+  });
+};
+const clampInputRange = (id: string) => {
+  addInputListener(id, tg => {
+    if (tg.min && Number(tg.min) > tg.valueAsNumber) tg.value = tg.min;
+    if (tg.max && Number(tg.max) < tg.valueAsNumber) tg.value = tg.max;
+  });
+};
 document.getElementsByName("goMessage")[0].addEventListener('click', function(){
   reflectNormalMsg();
   NewsOperator.clearAll();
@@ -4052,7 +4171,7 @@ document.getElementsByName("goMessage")[0].addEventListener('click', function(){
   textOffsetX = 1200;
   timeCount = 217;
 });
-document.getElementById("into-fullscreen").addEventListener('click', function(){
+addClickListener("into-fullscreen", () => {
   const ratio = (window.outerWidth-Window_FrameWidth)/window.innerWidth;
   document.getElementsByClassName("canvas-container")[0].classList.add("fullview");
   document.body.classList.add("fullview");
@@ -4081,33 +4200,34 @@ document.getElementsByName("tmpl-button")[5].addEventListener('click', function(
 document.getElementsByName("tmpl-button")[6].addEventListener('click', function(){quakeTemplateView(7); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 document.getElementsByName("tmpl-button")[7].addEventListener('click', function(){quakeTemplateView(8); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 document.getElementsByName("tmpl-button")[8].addEventListener('click', function(){quakeTemplateView(9); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
-document.getElementById("speedVal").addEventListener('input', function (){
-  changeTextSpeed();
-});
+addInputListener("speedVal", () => { changeTextSpeed(); });
 document.getElementsByName("BreakingNewsView")[0].addEventListener('click', function(){BNref()});
 document.getElementsByName("wtWarnListView")[0].addEventListener('click', function(){viewWeatherWarningList();});
 document.getElementsByName("sorabtn")[0].addEventListener('click', function(){sorabtn_view()});
 document.getElementsByName("sorabtn")[1].addEventListener('click', function(){sorabtn_open()});
 document.getElementsByName("sorabtn")[2].addEventListener('click', function(){sorabtn_close()});
-document.getElementById("isSoraview").addEventListener('click', function(){isSoraview = document.getElementById('isSoraview').checked});
-document.getElementById("stopWarnAudio").addEventListener('click', function(){audioAPI.fun.stopOscillator()});
-document.getElementById("startEEWfcstTest").addEventListener('click', function(){
+addClickListener("isSoraview", () => {
+  const el = getInputEl("isSoraview");
+  if (el) sorabtnState.isSoraview = el.checked;
+});
+addClickListener("stopWarnAudio", () => {audioAPI.fun.stopOscillator();});
+addClickListener("startEEWfcstTest", function(){
   testNow = true;
   RequestURL.iedred7584_eew = "../data/sample/normal.json";
   RequestURL.lmoni_eew = "../data/sample/l-normal.json";
   // eewOffset = 1661471326000 - getAdjustedDate();
 });
-document.getElementById("startEEWwarnTest").addEventListener('click', function(){
+addClickListener("startEEWwarnTest", function(){
   testNow = true;
   RequestURL.iedred7584_eew = "../data/sample/warning.json";
   RequestURL.lmoni_eew = "../data/sample/l-warning.json";
   // eewOffset = 1642781328000 - getAdjustedDate();
 });
-document.getElementById("startEEWcancelTest").addEventListener('click', function(){
+addClickListener("startEEWcancelTest", function(){
   testNow = true;
   RequestURL.iedred7584_eew = "../data/sample/cancel.json";
 });
-document.getElementById("stopEEWtest").addEventListener('click', function(){
+addClickListener("stopEEWtest", function(){
   testNow = false; SetMode(0);
   RequestURL.iedred7584_eew = "https://api.iedred7584.com/eew/json/";
   RequestURL.lmoni_eew = "https://www.lmoni.bosai.go.jp/monitor/webservice/hypo/eew/{yyyyMMddHHmmss}.json";
@@ -4115,12 +4235,12 @@ document.getElementById("stopEEWtest").addEventListener('click', function(){
 });
 
 // background_send("ZoomInformation["+Math.round(window.outerWidth/window.innerWidth*100)/100+"]");
-document.getElementById("ChangeToEq").addEventListener('click', function (){SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+addClickListener("ChangeToEq", function (){SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 
-document.getElementById("speech-vol-input").addEventListener("input", function (event){
-  speechBase.volume = event.target.valueAsNumber;
+addInputListener("speech-vol-input", target => {
+  speechBase.volume = target.valueAsNumber;
 });
-document.getElementById("speech-test1").addEventListener("click", function (){
+addClickListener("speech-test1", function (){
   speechBase.start([
     { type: "path", speakerId: "speaker8", path: "eew.epicenter.long.011" },
     { type: "path", speakerId: "speaker8", path: "eew.ungrouped.4" },
@@ -4151,63 +4271,61 @@ document.getElementById("speech-test1").addEventListener("click", function (){
   ])
 });
 
-document.getElementById("dataSaver").addEventListener('click', function (){ savedata(); });
-document.getElementById("unitsReflect").addEventListener('click', function (){rain_windData(1)});
-document.getElementsByName("themeColors")[0].addEventListener('change', function (){ colorThemeMode = Number(document.getElementsByName("themeColors")[0].value); if(viewMode === 0){ Routines.md0title(); }; Routines.subCanvasTime(getAdjustedDate()); });
-document.getElementById('setIntervalIedred').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalNHKquake').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalJmaWt').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalWarn').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalTenkiJpTsu').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalTyphCom').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalWNImscale').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalWNIsorabtn').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalWNIriver').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
-document.getElementById('setIntervalTpcBlackOut').addEventListener("input", function (event){let tg = event.target; if ((tg.min-0) > tg.valueAsNumber && tg.min){ tg.value = tg.min; } if ((tg.max-0) < tg.valueAsNumber && tg.max){ tg.value = tg.max; }});
+addClickListener("dataSaver", () => { savedata(); });
+addClickListener("unitsReflect", () => {rain_windData(true);});
+document.getElementsByName("themeColors")[0].addEventListener('change', function (){ colorThemeMode = Number((document.getElementsByName("themeColors")[0] as HTMLInputElement).value); if(viewMode === 0){ Routines.md0title(); }; Routines.subCanvasTime(getAdjustedDate()); });
+["setIntervalIedred","setIntervalNHKquake","setIntervalJmaWt","setIntervalWarn","setIntervalTenkiJpTsu","setIntervalTyphCom","setIntervalWNImscale","setIntervalWNIsorabtn","setIntervalWNIriver","setIntervalTpcBlackOut"].forEach(clampInputRange);
 
-document.getElementById('volEEWl1').addEventListener("input", function (event){ SFXController.volume(sounds.eew.first, event.target.value / 100); });
-document.getElementById('volEEWl5').addEventListener("input", function (event){ SFXController.volume(sounds.eew.continue, event.target.value / 100); });
-document.getElementById('volEEWl9').addEventListener("input", function (event){ SFXController.volume(sounds.eew.last, event.target.value / 100); });
-document.getElementById('volEEWh').addEventListener("input", function (event){ audioAPI.gainNode.gain.value = event.target.value / 100; });
-document.getElementById('volEEWp').addEventListener("input", function (event){ SFXController.volume(sounds.eew.plum, event.target.value / 100) });
-document.getElementById('volEEWc').addEventListener("input", function (event){ SFXController.volume(sounds.eew.custom, event.target.value / 100) });
-document.getElementById('volGL').addEventListener("input", function (event){ SFXController.volume(sounds.warning.GroundLoosening, event.target.value / 100); });
-document.getElementById('volNtc').addEventListener("input", function (event){ SFXController.volume(sounds.warning.Notice, event.target.value / 100); });
-document.getElementById('volSpW').addEventListener("input", function (event){ SFXController.volume(sounds.warning.Emergency, event.target.value / 100); });
-document.getElementById('volTnm').addEventListener("input", function (event){
-  const volume = event.target.value / 100;
+addInputListener('volEEWl1', target => { SFXController.volume(sounds.eew.first, target.valueAsNumber / 100); });
+addInputListener('volEEWl5', target => { SFXController.volume(sounds.eew.continue, target.valueAsNumber / 100); });
+addInputListener('volEEWl9', target => { SFXController.volume(sounds.eew.last, target.valueAsNumber / 100); });
+addInputListener('volEEWh', target => { audioAPI.gainNode.gain.value = target.valueAsNumber / 100; });
+addInputListener('volEEWp', target => { SFXController.volume(sounds.eew.plum, target.valueAsNumber / 100); });
+addInputListener('volEEWc', target => { SFXController.volume(sounds.eew.custom, target.valueAsNumber / 100); });
+addInputListener('volGL', target => { SFXController.volume(sounds.warning.GroundLoosening, target.valueAsNumber / 100); });
+addInputListener('volNtc', target => { SFXController.volume(sounds.warning.Notice, target.valueAsNumber / 100); });
+addInputListener('volSpW', target => { SFXController.volume(sounds.warning.Emergency, target.valueAsNumber / 100); });
+addInputListener('volTnm', target => {
+  const volume = target.valueAsNumber / 100;
   SFXController.volume(sounds.tsunami.watch, volume);
   SFXController.volume(sounds.tsunami.notice, volume);
   SFXController.volume(sounds.tsunami.warning, volume);
   SFXController.volume(sounds.tsunami.majorwarning, volume);
 });
-document.getElementById('volHvRa').addEventListener("input", function (event){ SFXController.volume(sounds.warning.HeavyRain, event.target.value / 100); });
-document.getElementById('volFldOc5').addEventListener("input", function (event){ SFXController.volume(sounds.warning.Flood5, event.target.value / 100); });
-document.getElementById('volFldOc4').addEventListener("input", function (event){ SFXController.volume(sounds.warning.Flood4, event.target.value / 100); });
+addInputListener('volHvRa', target => { SFXController.volume(sounds.warning.HeavyRain, target.valueAsNumber / 100); });
+addInputListener('volFldOc5', target => { SFXController.volume(sounds.warning.Flood5, target.valueAsNumber / 100); });
+addInputListener('volFldOc4', target => { SFXController.volume(sounds.warning.Flood4, target.valueAsNumber / 100); });
 
-document.getElementById('voltestEEWl1').addEventListener("click", function(){ SFXController.play(sounds.eew.first); });
-document.getElementById('voltestEEWl5').addEventListener("click", function(){ SFXController.play(sounds.eew.continue); });
-document.getElementById('voltestEEWl9').addEventListener("click", function(){ SFXController.play(sounds.eew.last); });
-document.getElementById('voltestEEWh').addEventListener("click", function(){ audioAPI.fun.startOscillator(); audioAPI.fun.stopOscillator(3);});
-document.getElementById('voltestEEWp').addEventListener("click", function(){ SFXController.play(sounds.eew.plum); });
-document.getElementById('voltestEEWcustom').addEventListener("click", function(){ SFXController.play(sounds.eew.custom); });
-document.getElementById('voltestGL').addEventListener("click", function(){ SFXController.play(sounds.warning.GroundLoosening); });
-document.getElementById('voltestNtc').addEventListener("click", function(){ SFXController.play(sounds.warning.Notice); });
-document.getElementById('voltestSpW').addEventListener("click", function(){ SFXController.play(sounds.warning.Emergency); });
-document.getElementById('voltestTnm').addEventListener("click", function(){ SFXController.play(sounds.tsunami[["watch","warning","notice","majorwarning"][Math.floor(Math.random()*4)]]); });
-document.getElementById('voltestHvRa').addEventListener("click", function(){ SFXController.play(sounds.warning.HeavyRain); });
-document.getElementById('voltestFldOc5').addEventListener("click", function(){ SFXController.play(sounds.warning.Flood5); });
-document.getElementById('voltestFldOc4').addEventListener("click", function(){ SFXController.play(sounds.warning.Flood4); });
+addClickListener('voltestEEWl1', () => { SFXController.play(sounds.eew.first); });
+addClickListener('voltestEEWl5', () => { SFXController.play(sounds.eew.continue); });
+addClickListener('voltestEEWl9', () => { SFXController.play(sounds.eew.last); });
+addClickListener('voltestEEWh', () => { audioAPI.fun.startOscillator(); audioAPI.fun.stopOscillator(3);});
+addClickListener('voltestEEWp', () => { SFXController.play(sounds.eew.plum); });
+addClickListener('voltestEEWcustom', () => { SFXController.play(sounds.eew.custom); });
+addClickListener('voltestGL', () => { SFXController.play(sounds.warning.GroundLoosening); });
+addClickListener('voltestNtc', () => { SFXController.play(sounds.warning.Notice); });
+addClickListener('voltestSpW', () => { SFXController.play(sounds.warning.Emergency); });
+addClickListener('voltestTnm', () => {
+  const tsunamiKeys: Array<keyof Sounds["tsunami"]> = ["watch","warning","notice","majorwarning"];
+  const key = tsunamiKeys[Math.floor(Math.random()*tsunamiKeys.length)];
+  SFXController.play(sounds.tsunami[key]);
+});
+addClickListener('voltestHvRa', () => { SFXController.play(sounds.warning.HeavyRain); });
+addClickListener('voltestFldOc5', () => { SFXController.play(sounds.warning.Flood5); });
+addClickListener('voltestFldOc4', () => { SFXController.play(sounds.warning.Flood4); });
 
-elements.id.masterGainRange.addEventListener("input", event => audioAPI.masterGainValue = event.target.valueAsNumber);
+elements.id.masterGainRange.addEventListener("input", event => {
+  const target = event.target as HTMLInputElement | null;
+  if (target) audioAPI.masterGainValue = target.valueAsNumber;
+});
 
-document.getElementById('viewTsunamiType').addEventListener("change", function(){
-  t_viewType = elements.id.viewTsunamiType.value - 0;
+(document.getElementById('viewTsunamiType') as HTMLSelectElement).addEventListener("change", function(){
+  t_viewType = Number(elements.id.viewTsunamiType.value);
   if (viewMode === 0) Routines.md0title();
 });
 
-document.getElementById('exportEEWs').addEventListener("click", function(){
-  eewDatas.savedTime = (new Date())/1000;
+addClickListener('exportEEWs', function(){
+  eewDatas.savedTime = (new Date()).valueOf()/1000;
   let blob = new Blob([JSON.stringify(eewDatas)], {type: "application/json"});
   let url = URL.createObjectURL(blob);
   let link = document.createElement("a");
@@ -4217,30 +4335,36 @@ document.getElementById('exportEEWs').addEventListener("click", function(){
   URL.revokeObjectURL(url);
 });
 
-document.getElementsByClassName('BGMinput')[0].addEventListener('change', function(e){
-  if (e.target.files.length){
+(document.getElementsByClassName('BGMinput')[0] as HTMLInputElement).addEventListener('change', function(e){
+  const inputTarget = e.target as HTMLInputElement | null;
+  const files = inputTarget?.files;
+  if (files && files.length){
     for (const item of backMsc){
       const bufferSource = item.bufferSource;
       const gainNode = item.gainNode;
       const context = item.context;
-      gainNode.gain.value = 0;
-      gainNode.disconnect();
+      if (gainNode) gainNode.gain.value = 0;
+      gainNode?.disconnect();
       try {
-        context.close();
-        bufferSource.stop();
+        context?.close();
+        bufferSource?.stop();
       } catch {}
-      bufferSource.disconnect();
+      bufferSource?.disconnect();
     }
-    backMsc = [];
-    document.getElementById("audiolist").innerHTML = "";
+    backMsc = [] as BackMscItem[];
+    const audiolist = document.getElementById("audiolist");
+    if (audiolist) audiolist.innerHTML = "";
   }
-  for (let i=0; i<e.target.files.length; i++){
+  if (!files) return;
+  for (let i=0; i<files.length; i++){
     const index = backMsc.push({}) - 1;
-    const reader = new FileReader();
-    console.log(e.target.files[i]);
-    reader.fileName = e.target.files[i].name;
+    const reader = new FileReader() as FileReader & { fileName?: string; index?: number };
+    console.log(files[i]);
+    reader.fileName = files[i].name;
     reader.index = index;
-    document.getElementById("audiolist").insertAdjacentHTML("beforeend", `<div style="margin: 10px 0;">
+    const audiolist = document.getElementById("audiolist");
+    if (!audiolist) continue;
+    audiolist.insertAdjacentHTML("beforeend", `<div style="margin: 10px 0;">
 <span class="musicFileName">${reader.fileName.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#039;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
 <div style="position: relative; width: 580px; height: 65px; color: #fff; font-size: 13px;">
 <div style="position: absolute; z-index: 1; top: 0; left: 0; width: 100%; height: 100%; border-radius: 8px; background-color: #0000008c;"></div>
@@ -4282,7 +4406,8 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
 </div>`);
     reader.addEventListener("load", function(){
       const index = reader.index;
-      const here = (backMsc[index] = {});
+      if (index === undefined) return;
+      const here = (backMsc[index] = {} as any);
       here.context = new AudioContext();
       here.gainNode = here.context.createGain();
       here.bufferSource = here.context.createBufferSource();
@@ -4290,7 +4415,7 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
       here.gainNode.mIndex = index;
       here.bufferSource.mIndex = index;
       here.bufferSource.createdAt = new Date();
-      here.context.decodeAudioData(this.result, function(buffer){
+      here.context.decodeAudioData(this.result as ArrayBuffer, function(buffer: AudioBuffer){
         // debugger;
         here.bufferSource.buffer = buffer;
         here.bufferSource.playbackRate.value = 1;
@@ -4300,7 +4425,7 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
         here.lastUpdate = 0;
         here.playing = false;
         here.playAfterReset = null;
-        here.play = function(start){
+        here.play = function(start?: number){
           let startTime = start ?? this.pausedAt;
           if (startTime >= this.bufferSource.buffer.duration - 0.05) startTime = 0;
           this.bufferSource.start(0, startTime);
@@ -4309,8 +4434,8 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
           this.playing = true;
           if (this.onStateChange) this.onStateChange(true, this.context.mIndex);
         };
-        here.bufferEnd = function(event){
-          const musicIndex = event.target.context.mIndex;
+        here.bufferEnd = function(event: any){
+          const musicIndex = event?.target?.context?.mIndex;
           const here = backMsc[musicIndex];
           const bufferSource = here.bufferSource;
           const gainNode = here.gainNode;
@@ -4386,32 +4511,37 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
             this.pausedAt = seconds;
           }
         }});
-        here.onStateChange = function(state, index){
-          document.querySelectorAll(".musicstart")[index].classList.remove("musichide");
-          document.querySelectorAll(".musicpause")[index].classList.remove("musichide");
-          document.querySelectorAll(".musicstart")[index].classList.remove("musicactive");
-          document.querySelectorAll(".musicpause")[index].classList.remove("musicactive");
+        here.onStateChange = function(state: boolean, index: number){
+          const starts = document.querySelectorAll(".musicstart");
+          const pauses = document.querySelectorAll(".musicpause");
+          starts[index].classList.remove("musichide");
+          pauses[index].classList.remove("musichide");
+          starts[index].classList.remove("musicactive");
+          pauses[index].classList.remove("musicactive");
           if(state){
-            document.querySelectorAll(".musicstart")[index].classList.add("musichide");
-            document.querySelectorAll(".musicpause")[index].classList.add("musicactive");
+            starts[index].classList.add("musichide");
+            pauses[index].classList.add("musicactive");
           } else {
-            document.querySelectorAll(".musicstart")[index].classList.add("musicactive");
-            document.querySelectorAll(".musicpause")[index].classList.add("musichide");
+            starts[index].classList.add("musicactive");
+            pauses[index].classList.add("musichide");
           }
         };
-        here.storage.operation.play.addEventListener("click", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
+        here.storage.operation.play.addEventListener("click", function(event: Event){
+          const target = event.currentTarget as HTMLElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
           backMsc[index].bufferSource.loop = backMsc[index].storage.loop.effective;
           backMsc[index].bufferSource.loopStart = backMsc[index].storage.loop.start;
           backMsc[index].bufferSource.loopEnd = backMsc[index].storage.loop.end;
           backMsc[index].play();
         });
-        here.storage.operation.pause.addEventListener("click", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
+        here.storage.operation.pause.addEventListener("click", function(event: Event){
+          const target = event.currentTarget as HTMLElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
           backMsc[index].bufferSource.stop();
         });
-        here.storage.loop.inputElement.addEventListener("click", function(event){
-          const index = event.currentTarget.getAttribute("data-index") - 0;
+        here.storage.loop.inputElement.addEventListener("click", function(event: Event){
+          const target = event.currentTarget as HTMLElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
           const here = backMsc[index];
           if (here.storage.loop.effective = here.bufferSource.loop = !here.storage.loop.effective){
             here.storage.loop.inputElement.style.fill = "#9bff7a";
@@ -4421,28 +4551,37 @@ document.getElementsByClassName('BGMinput')[0].addEventListener('change', functi
             here.storage.loop.statusElement.textContent = "OFF";
           }
         });
-        here.storage.operation.repeatStart.addEventListener("change", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
-          backMsc[index].storage.loop.start = backMsc[index].bufferSource.loopStart = event.target.value ? event.target.value - 0 : 0;
+        here.storage.operation.repeatStart.addEventListener("change", function(event: Event){
+          const target = event.currentTarget as HTMLInputElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
+          const value = target?.value ? Number(target.value) : 0;
+          backMsc[index].storage.loop.start = backMsc[index].bufferSource.loopStart = value;
         });
-        here.storage.operation.repeatEnd.addEventListener("change", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
+        here.storage.operation.repeatEnd.addEventListener("change", function(event: Event){
+          const target = event.currentTarget as HTMLInputElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
           const here = backMsc[index];
-          backMsc[index].storage.loop.end = backMsc[index].bufferSource.loopEnd = event.target.value ? event.target.value - 0 : here.bufferSource.buffer.duration;
+          const value = target?.value ? Number(target.value) : here.bufferSource.buffer.duration;
+          backMsc[index].storage.loop.end = backMsc[index].bufferSource.loopEnd = value;
         });
-        here.storage.operation.volume.addEventListener("input", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
-          backMsc[index].gainNode.gain.value = event.target.value / 100;
-          document.getElementsByClassName("BGMvolOutput")[index].textContent = event.target.value + "%";
+        here.storage.operation.volume.addEventListener("input", function(event: Event){
+          const target = event.currentTarget as HTMLInputElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
+          if (!target) return;
+          backMsc[index].gainNode.gain.value = target.valueAsNumber / 100;
+          const output = document.getElementsByClassName("BGMvolOutput")[index] as HTMLElement;
+          output.textContent = target.value + "%";
         });
-        here.storage.progressbar.inputElement.addEventListener("click", function(event){
-          const index = event.target.getAttribute("data-index") - 0;
+        here.storage.progressbar.inputElement.addEventListener("click", function(event: Event){
+          const target = event.currentTarget as HTMLInputElement | null;
+          const index = Number(target?.getAttribute("data-index") ?? 0);
           const here = backMsc[index];
-          here.currentTime = event.currentTarget.value * here.bufferSource.buffer.duration;
+          if (!target) return;
+          here.currentTime = Number(target.value) * here.bufferSource.buffer.duration;
         });
       });
     });
-    reader.readAsArrayBuffer(e.target.files[i]);
+    reader.readAsArrayBuffer(files[i]);
   }
 });
 

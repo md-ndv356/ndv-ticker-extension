@@ -1,11 +1,17 @@
 // main canvas
+/** @type {HTMLCanvasElement} */
 const canvas1 = document.getElementById('sample1');
+/** @type {CanvasRenderingContext2D} */
 const context = canvas1.getContext('2d');
 // clock canvas
+/** @type {HTMLCanvasElement} */
 const canvas2 = document.getElementById('sample2');
+/** @type {CanvasRenderingContext2D} */
 const time = canvas2.getContext('2d');
 // 気象速報サブタイトル
+/** @type {HTMLCanvasElement} */
 const canvas3 = document.createElement("canvas");
+/** @type {CanvasRenderingContext2D} */
 const ctx3 = canvas3.getContext('2d');
 // // 左側三角
 // const canvas4 = document.createElement("canvas");
