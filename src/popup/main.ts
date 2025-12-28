@@ -1404,36 +1404,28 @@ for (const idx in elements.class.switch_button){
   });
 }
 
-$('#menu .quakeList').hide();
-$('#menu .tsunamiList').hide();
-$('#menu .dataList').hide();
-$('.settings-box button').eq(0).on('click', function(){
-  $('#menu .quakeList').toggle(200);
-  $('#menu .tsunamiList').hide(200);
-  $('#menu .dataList').hide(200);
-  // document.getElementById("eiTitle").innerText = "[地震情報](" + q_timeYY + "/" + q_timeMM + "/" + q_timeDD + " " + q_timeH + ":" + q_timeM + "頃発生) 震源地:" + q_epiName + " 最大震度:" + shindoListJP[q_maxShindo] + " M" + q_magnitude + " 深さ:" + ((q_depth == "ごく浅い")?q_depth:"約"+q_depth+"km");
-  // document.getElementById("eiwind").innerText = "";
-  // if (q_maxShindo == -1){
-  //   document.getElementById("eiTitle").innerText = "まだ情報は入っていません。";
-  //   document.getElementById("eiwind").innerText = "";
-  // } else {
-  //   for(var i=10; i>0; i--){
-  //     if(quakeText[i] != ""){
-  //       document.getElementById("eiwind").innerText += "［震度" + toFull(shindoListJP[i]) + "］\n　" + ( q_magnitude!='--' ? (quakeText[i].replace(/　 </g, '\n　').slice(1)) : (quakeText[i].replace(/　 </g, '\n　')) ).replace(/> /g, '：') + "\n";
-  //     }
-  //   }
-  // }
-});
-$('.settings-box button').eq(1).on('click', function(){
-  $('#menu .quakeList').hide(200);
-  $('#menu .tsunamiList').toggle(200);
-  $('#menu .dataList').hide(200);
-});
-$('.settings-box button').eq(2).on('click', function(){
-  $('#menu .quakeList').hide(200);
-  $('#menu .tsunamiList').hide(200);
-  $('#menu .dataList').toggle(200);
-});
+const menuQuakeList = document.querySelector<HTMLElement>('#menu .quakeList');
+const menuTsunamiList = document.querySelector<HTMLElement>('#menu .tsunamiList');
+const menuDataList = document.querySelector<HTMLElement>('#menu .dataList');
+const settingsButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.settings-box button'));
+
+const hideMenuPanels = () => {
+  for (const panel of [menuQuakeList, menuTsunamiList, menuDataList]){
+    if (panel) panel.style.display = 'none';
+  }
+};
+
+const togglePanel = (target: HTMLElement | null) => {
+  if (!target) return;
+  const isVisible = getComputedStyle(target).display !== 'none';
+  hideMenuPanels();
+  target.style.display = isVisible ? 'none' : '';
+};
+
+hideMenuPanels();
+settingsButtons[0]?.addEventListener('click', () => togglePanel(menuQuakeList));
+settingsButtons[1]?.addEventListener('click', () => togglePanel(menuTsunamiList));
+settingsButtons[2]?.addEventListener('click', () => togglePanel(menuDataList));
 
 function drawRect(x: number, y: number, width: number, height: number, color: string){
   context.fillStyle = color;
@@ -2306,7 +2298,7 @@ function intervalReset() {
   soraopen_interval1 = null;
 }
 
-function strWidth(str) {
+function strWidth(str: string) {
   return context.measureText(str).width;
 }
 
@@ -2393,15 +2385,43 @@ async function sorabtn_view(){
     clearTimeout(timeoutId);
   }
 }
-function sorabtn_open(){
+const fetchJsonWithTimeout = async (url: string, timeoutMs = 0, cache: RequestCache = 'default') => {
+  const controller = new AbortController();
+  const timeoutId = timeoutMs > 0 ? window.setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  try {
+    const response = await fetch(url, { method: 'GET', cache, signal: controller.signal });
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+    return await response.json();
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
+const fetchTextWithEncoding = async (url: string, timeoutMs = 0, cache: RequestCache = 'default', mimeType?: string) => {
+  const controller = new AbortController();
+  const timeoutId = timeoutMs > 0 ? window.setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  try {
+    const response = await fetch(url, { method: 'GET', cache, signal: controller.signal });
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+    if (mimeType && mimeType.toLowerCase().includes('shift_jis')){
+      const buffer = await response.arrayBuffer();
+      return new TextDecoder('shift_jis').decode(buffer);
+    }
+    return await response.text();
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+};
+
+const fetchXmlWithTimeout = async (url: string, timeoutMs = 0, cache: RequestCache = 'default', mimeType?: string) => {
+  const text = await fetchTextWithEncoding(url, timeoutMs, cache, mimeType);
+  return new DOMParser().parseFromString(text, 'application/xml');
+};
+
+async function sorabtn_open(){
   soraopen_intervaltime = 0;
-  $.ajax({
-    type: 'GET',
-    url: RequestURL.wni_sorabtn,
-    dataType: 'json',
-    timeOut: 4500,
-    cache: false,
-    success: function(data){
+  try {
+    const data = await fetchJsonWithTimeout(RequestURL.wni_sorabtn, 4500, 'no-cache');
       sorabtn.tracker.update();
 
       soraopen = 3;
@@ -2424,11 +2444,10 @@ function sorabtn_open(){
       ans4 = data['data'][0]['ans4'] - 0;
       closeTime != "" ? isClose=true : isClose=false;
       maxans = [ans1,ans2,ans3,ans4].sort(function(a, b) { return b - a; })[0];
-    },
-    error: function(XMLHttpRequest, textStatus, errorThrown){
-      console.log("Loading Error (sorabtn-open)\nXMLHttpRequest: " + XMLHttpRequest.status + "\ntextStatus: " + textStatus + "\nerrorThrown: " + errorThrown.message);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log("Loading Error (sorabtn-open)\n" + message);
     }
-  });
 }
 function sorabtn_close(){
   soraopen = 0;
@@ -2441,29 +2460,22 @@ function sorabtn_close(){
   Routines.md0title();
 }
 
-var weather1hourrain = [];
-var weather24hourrain = [];
-var weatherMaximumWindSpeed = [];
-var weather_mxtemsadext = [];
-var weather_mntemsadext = [];
+type WeatherEntry = { pref: string; name: string; value: number };
+var weather1hourrain: WeatherEntry[] = [];
+var weather24hourrain: WeatherEntry[] = [];
+var weatherMaximumWindSpeed: WeatherEntry[] = [];
+var weather_mxtemsadext: WeatherEntry[] = [];
+var weather_mntemsadext: WeatherEntry[] = [];
 var weather1hourrainstr = "",
     weather24hoursrainstr = "",
     weatherMaximumWindSpeedstr = "",
     weather_mxtemsadextstr = "",
     weather_mntemsadextstr = "";
-var weather_prelist = [[],[],[],[],[]];
-function rain_windData(isFull){
+var weather_prelist: string[][] = [[],[],[],[],[]];
+async function rain_windData(isFull: boolean){
   weather_prelist = [[],[],[],[],[]];
-  $.ajax({
-    beforeSend: function(xhr){
-      xhr.overrideMimeType('text/plain; charset=shift_jis');
-    },
-    type: 'GET',
-    url: RequestURL.jmaTableCsvPre1h00_rct,
-    dataType: 'text',
-    timeOut: 50000,
-    cache: false,
-    success: function(data){
+  try {
+    const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvPre1h00_rct, 50000, 'no-cache', 'shift_jis');
       rain_windData.pre1h00_rct.update();
       weather1hourrain = [];
       var weatherDataListCSV = [];
@@ -2481,29 +2493,7 @@ function rain_windData(isFull){
         if(obj.value!=0 && weatherDataListCSV[i][10]=="8")weather1hourrain.push(obj);
         if(weather_prelist[0].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[0].push(weatherDataListCSV[i][1]);
       }
-      let s=""; i=0; // ←←←←←←←←←←←
-      // var spdl = document.getElementsByClassName('wpl0'); //SetPrefectureDataList
-      // for(let variable of weather_prelist[0]){
-      //   if(spdl[i]===undefined){
-      //     s += "<input type='checkbox' class='wpl0' value='"+variable+"' checked>";
-      //     s += variable;
-      //     s += "<br>";
-      //   } else {
-      //     s += "<input type='checkbox' class='wpl0' value='"+variable+"'" + (spdl[i].checked ? " checked" : "") + ">";
-      //     s += variable;
-      //     s += "<br>";
-      //   }
-      //   i++;
-      // }
-      // document.getElementById('main1').innerHTML = s;
-      // var cn = document.getElementsByClassName('wpl0');
-      // var wpll = [];
-      // for(let i=0; i<cn.length; i++){
-      //   if(cn[i].checked){
-      //     wpll.push(cn[i].value);
-      //   }
-      // }
-      // weather1hourrain = weather1hourrain.filter(function(a){return wpll.indexOf(a.pref)!=-1});
+    let s=""; i=0; // legacy leftover
       weather1hourrain.sort(function(a,b){return b.value-a.value});
       weather1hourrainstr = "[Maximum hourly precipitation]　("+obsTime+")　　　";
       var rank = 0;
@@ -2514,24 +2504,15 @@ function rain_windData(isFull){
         }
         weather1hourrainstr += rank+")"+weather1hourrain[i].pref+" "+weather1hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather1hourrain[i].value+"mm/h　　 ";
       }
-      if(weather1hourrainstr==""){
-        weather1hourrainstr = (wpll.join('、')+"では過去1時間以内に雨が降ったところはないようです。").replace(/ /g, "");
-        if(cn.length == wpll.length){
-          weather1hourrainstr = "日本で過去1時間以内に雨が降ったところはないようです。";
-        }
-      }
+    if(weather1hourrainstr===""){
+      weather1hourrainstr = "過去1時間の降水観測はありません。";
     }
-  });
-  $.ajax({
-    beforeSend: function(xhr){
-      xhr.overrideMimeType('text/plain; charset=shift_jis');
-    },
-    type: 'GET',
-    url: RequestURL.jmaTableCsvPre24h00_rct,
-    dataType: 'text',
-    timeOut: 50000,
-    cache: false,
-    success: function(data){
+  } catch (error) {
+    console.error("Loading Error (rain_windData pre1h00_rct)", error);
+        }
+
+  try {
+    const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvPre24h00_rct, 50000, 'no-cache', 'shift_jis');
       rain_windData.pre24h00_rct.update();
       weather24hourrain = [];
       var weatherDataListCSV = [];
@@ -2550,28 +2531,6 @@ function rain_windData(isFull){
         if(weather_prelist[1].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[1].push(weatherDataListCSV[i][1]);
       }
       var s="";i=0;
-      // var spdl = document.getElementsByClassName('wpl1'); //SetPrefectureDataList
-      // for(let variable of weather_prelist[1]){
-      //   if(spdl[i]===undefined){
-      //     s += "<input type='checkbox' class='wpl1' value='"+variable+"' checked>";
-      //     s += variable;
-      //     s += "<br>";
-      //   } else {
-      //     s += "<input type='checkbox' class='wpl1' value='"+variable+"'" + (spdl[i].checked ? " checked" : "") + ">";
-      //     s += variable;
-      //     s += "<br>";
-      //   }
-      //   i++;
-      // }
-      // document.getElementById('main2').innerHTML = s;
-      // var cn = document.getElementsByClassName('wpl1');
-      // var wpll = [];
-      // for(let i=0; i<cn.length; i++){
-      //   if(cn[i].checked){
-      //     wpll.push(cn[i].value);
-      //   }
-      // }
-      // weather24hourrain = weather24hourrain.filter(function(a){return wpll.indexOf(a.pref)!=-1});
       weather24hourrain.sort(function(a,b){return b.value-a.value});
       weather24hoursrainstr = "[Maximum 24-hour precipitation]　("+obsTime+")　　　";
       var rank = 0;
@@ -2582,22 +2541,16 @@ function rain_windData(isFull){
         }
         weather24hoursrainstr += rank+")"+weather24hourrain[i].pref+" "+weather24hourrain[i].name.replace(/（.{1,}）/, "")+" "+weather24hourrain[i].value+"mm/d　　 ";
       }
-      if (weather24hoursrainstr == ""){
-        weather24hoursrainstr = (wpll.join('、')+"では過去1時間以内に雨が降ったところはないようです。").replace(/ /g, "");
+    if (weather24hoursrainstr === ""){
+      weather24hoursrainstr = "過去24時間の降水観測はありません。";
       }
+  } catch (error) {
+    console.error("Loading Error (rain_windData pre24h00_rct)", error);
     }
-  });
+
   if (isFull){
-    $.ajax({
-      beforeSend: function(xhr){
-        xhr.overrideMimeType('text/plain; charset=shift_jis');
-      },
-      type: 'GET',
-      url: RequestURL.jmaTableCsvMxwsp00_rct,
-      dataType: 'text',
-      timeOut: 50000,
-      cache: false,
-      success: function(data){
+    try {
+      const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMxwsp00_rct, 50000, 'no-cache', 'shift_jis');
         rain_windData.mxwsp00_rct.update();
         weatherMaximumWindSpeed = [];
         var weatherDataListCSV = [];
@@ -2616,32 +2569,10 @@ function rain_windData(isFull){
           if(weather_prelist[2].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[2].push(weatherDataListCSV[i][1]);
         }
         var s=""; i=0;
-        // var spdl = document.getElementsByClassName('wpl2'); //SetPrefectureDataList
-        // for(var variable of weather_prelist[2]){
-        //   if(spdl[i]===undefined){
-        //     s += "<input type='checkbox' class='wpl2' value='"+variable+"' checked>";
-        //     s += variable;
-        //     s += "<br>";
-        //   } else {
-        //     s += "<input type='checkbox' class='wpl2' value='"+variable+"'" + (spdl[i].checked ? " checked" : "") + ">";
-        //     s += variable;
-        //     s += "<br>";
-        //   }
-        //   i++;
-        // }
-        // document.getElementById('main3').innerHTML = s;
-        // var cn = document.getElementsByClassName('wpl2');
-        // var wpll = [];
-        // for(var i=0; i<cn.length; i++){
-        //   if(cn[i].checked){
-        //     wpll.push(cn[i].value);
-        //   }
-        // }
-        // weatherMaximumWindSpeed = weatherMaximumWindSpeed.filter(function(a){return wpll.indexOf(a.pref)!=-1});
         weatherMaximumWindSpeed.sort(function(a,b){return b.value-a.value});
         weatherMaximumWindSpeedstr = "[Maximum wind speed]　("+obsTime+")　　　";
         var rank = 0;
-        let unit = document.getElementsByName('unitWinds')[0].value;
+      let unit = (document.getElementsByName('unitWinds')[0] as HTMLSelectElement).value;
         switch (unit) {
           case "km/h":
             for(let i=0; i<weatherMaximumWindSpeed.length; i++){
@@ -2675,18 +2606,12 @@ function rain_windData(isFull){
           }
           weatherMaximumWindSpeedstr += rank+")"+weatherMaximumWindSpeed[i].pref+" "+weatherMaximumWindSpeed[i].name.replace(/（.{1,}）/, "")+" "+weatherMaximumWindSpeed[i].value+""+unit+"　　 ";
         }
-      }
-    });
-    $.ajax({
-      beforeSend: function(xhr){
-        xhr.overrideMimeType('text/plain; charset=shift_jis');
-      },
-      type: 'GET',
-      url: RequestURL.jmaTableCsvMxtemsadext00_rct,
-      dataType: 'text',
-      timeOut: 50000,
-      cache: false,
-      success: function(data){
+    } catch (error) {
+      console.error("Loading Error (rain_windData mxwsp00_rct)", error);
+    }
+
+    try {
+      const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMxtemsadext00_rct, 50000, 'no-cache', 'shift_jis');
         rain_windData.mxtemsadext00_rct.update();
         weather_mxtemsadext = [];
         var weatherDataListCSV = [];
@@ -2705,32 +2630,10 @@ function rain_windData(isFull){
           if(weather_prelist[3].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[3].push(weatherDataListCSV[i][1]);
         }
         var s="";i=0;
-        // var spdl = document.getElementsByClassName('wpl3'); //SetPrefectureDataList
-        // for(var variable of weather_prelist[3]){
-        //   if(spdl[i]===undefined){
-        //     s += "<input type='checkbox' class='wpl3' value='"+variable+"' checked>";
-        //     s += variable;
-        //     s += "<br>";
-        //   } else {
-        //     s += "<input type='checkbox' class='wpl3' value='"+variable+"'" + (spdl[i].checked ? " checked" : "") + ">";
-        //     s += variable;
-        //     s += "<br>";
-        //   }
-        //   i++;
-        // }
-        // document.getElementById('main4').innerHTML = s;
-        // var cn = document.getElementsByClassName('wpl3');
-        // var wpll = [];
-        // for(var i=0; i<cn.length; i++){
-        //   if(cn[i].checked){
-        //     wpll.push(cn[i].value);
-        //   }
-        // }
-        // weather_mxtemsadext = weather_mxtemsadext.filter(function(a){return wpll.indexOf(a.pref)!=-1});
         weather_mxtemsadext.sort(function(a,b){return b.value-a.value});
         weather_mxtemsadextstr = "[Maximum temperature]　("+obsTime+")　　　";
         var rank = 0;
-        let unit = document.getElementsByName('unitTemp')[0].value;
+      let unit = (document.getElementsByName('unitTemp')[0] as HTMLSelectElement).value;
         switch (unit) {
           case "K":
             for(let i=0; i<weather_mxtemsadext.length; i++){
@@ -2751,18 +2654,12 @@ function rain_windData(isFull){
           }
           weather_mxtemsadextstr += rank+")"+weather_mxtemsadext[i].pref+" "+weather_mxtemsadext[i].name.replace(/（.{1,}）/, "")+" "+weather_mxtemsadext[i].value+""+unit+"　　 ";
         }
-      }
-    });
-    $.ajax({
-      beforeSend: function(xhr){
-        xhr.overrideMimeType('text/plain; charset=shift_jis');
-      },
-      type: 'GET',
-      url: RequestURL.jmaTableCsvMntemsadext00_rct,
-      dataType: 'text',
-      timeOut: 50000,
-      cache: false,
-      success: function(data){
+    } catch (error) {
+      console.error("Loading Error (rain_windData mxtemsadext00_rct)", error);
+    }
+
+    try {
+      const data = await fetchTextWithEncoding(RequestURL.jmaTableCsvMntemsadext00_rct, 50000, 'no-cache', 'shift_jis');
         rain_windData.mntemsadext00_rct.update();
         weather_mntemsadext = [];
         var weatherDataListCSV = [];
@@ -2781,32 +2678,10 @@ function rain_windData(isFull){
           if(weather_prelist[4].indexOf(weatherDataListCSV[i][1])==-1)weather_prelist[4].push(weatherDataListCSV[i][1]);
         }
         var s="";i=0;
-        // var spdl = document.getElementsByClassName('wpl4'); //SetPrefectureDataList
-        // for(var variable of weather_prelist[4]){
-        //   if(spdl[i]===undefined){
-        //     s += "<input type='checkbox' class='wpl4' value='"+variable+"' checked>";
-        //     s += variable;
-        //     s += "<br>";
-        //   } else {
-        //     s += "<input type='checkbox' class='wpl4' value='"+variable+"'" + (spdl[i].checked ? " checked" : "") + ">";
-        //     s += variable;
-        //     s += "<br>";
-        //   }
-        //   i++;
-        // }
-        // document.getElementById('main5').innerHTML = s;
-        // var cn = document.getElementsByClassName('wpl4');
-        // var wpll = [];
-        // for(var i=0; i<cn.length; i++){
-        //   if(cn[i].checked){
-        //     wpll.push(cn[i].value);
-        //   }
-        // }
-        // weather_mntemsadext = weather_mntemsadext.filter(function(a){return wpll.indexOf(a.pref)!=-1});
         weather_mntemsadext.sort(function(a,b){return a.value-b.value});
         weather_mntemsadextstr = "[Minimum temperature]　("+obsTime+")　　　";
         var rank = 0;
-        let unit = document.getElementsByName('unitTemp')[0].value;
+      let unit = (document.getElementsByName('unitTemp')[0] as HTMLSelectElement).value;
         switch (unit) {
           case "K":
             for(let i=0; i<weather_mntemsadext.length; i++){
@@ -2827,8 +2702,9 @@ function rain_windData(isFull){
           }
           weather_mntemsadextstr += rank+")"+weather_mntemsadext[i].pref+" "+weather_mntemsadext[i].name.replace(/（.{1,}）/, "")+" "+weather_mntemsadext[i].value+""+unit+"　　 ";
         }
+    } catch (error) {
+      console.error("Loading Error (rain_windData mntemsadext00_rct)", error);
       }
-    });
   }
 }
 rain_windData.pre1h00_rct = new TrafficTracker("JMA / 1時間降水量 最新");
@@ -3092,21 +2968,18 @@ function parseRainfallData(text){
   return results;
 }
 
-function weatherInfo(){
-  $.ajax({
-    type: 'GET',
-    url: "https://www.data.jma.go.jp/developer/xml/feed/extra.xml",
-    dataType: 'xml',
-    cache: false,
-    success: data => {
+async function weatherInfo(){
+  try {
+    const data = await fetchXmlWithTimeout("https://www.data.jma.go.jp/developer/xml/feed/extra.xml", 15000, 'no-cache');
       weatherInfo.tracker.update();
       const performWeatherStartAt = performance.now() * 1000;
       if (viewMode === 2 || viewMode === 1) return;
-      const arr = [];
+    const arr: string[] = [];
       let isChange = true;
-      $(data).find('entry').each(function (){
-        const linkAttrHref = this.fun1("link").getAttribute('href');
-        const titleTextCotent = this.fun1('title').textContent;
+    for (const entry of Array.from(data.getElementsByTagName('entry'))){
+      const linkAttrHref = entry.querySelector('link')?.getAttribute('href');
+      const titleTextCotent = entry.querySelector('title')?.textContent ?? "";
+      if (!linkAttrHref) continue;
         if (weatherlink.indexOf(linkAttrHref) !== -1) isChange = false;
         arr.push(linkAttrHref);
         if (isChange && titleTextCotent !== "早期天候情報" && titleTextCotent !== "気象警報・注意報" && titleTextCotent !== "気象特別警報・警報・注意報"){
@@ -3120,29 +2993,24 @@ function weatherInfo(){
         }
         if (q_startTime > 300 && isChange){
           if (titleTextCotent === "気象警報・注意報（Ｈ２７）"){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(xmlRoot){
-                const title = "気象警報・注意報 " + xmlRoot.querySelector('Body > Warning[type="気象警報・注意報（府県予報区等）"] > Item > Area > Name').textContent;
-                // const text = xmlRoot.querySelector('Report > Head > Headline > Text').textContent;
-                for (const item1 of Array.from(xmlRoot.querySelector('Warning[type="気象警報・注意報（一次細分区域等）"]').getElementsByTagName("Item"))){
-                  const alertPlace = AreaForecastLocalM.warn[item1.querySelector("Area > Code").textContent];
+          try {
+            const xmlRoot = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
+            const title = "気象警報・注意報 " + xmlRoot.querySelector('Body > Warning[type="気象警報・注意報（府県予報区等）"] > Item > Area > Name')?.textContent;
+            for (const item1 of Array.from(xmlRoot.querySelector('Warning[type="気象警報・注意報（一次細分区域等）"]')?.getElementsByTagName("Item") ?? [])){
+              const alertPlace = AreaForecastLocalM.warn[item1.querySelector("Area > Code")?.textContent ?? ""];
                   for (const item2 of Array.from(item1.getElementsByTagName("Kind"))){
-                    const alertStatus = item2.getElementsByTagName("Status")[0].textContent;
+                const alertStatus = item2.getElementsByTagName("Status")?.[0]?.textContent;
                     const lastAlertType = item2.querySelector("LastKind > Name")?.textContent;
                     const alertType = item2.getElementsByTagName('Name')?.[0]?.textContent ?? "";
                     if (alertStatus === "発表"){
                       const mainText = "【 " + alertPlace + " 】 発表：" + alertType;
-                      const nextKinds = [];
+                  const nextKinds: string[] = [];
                       for (const item3 of Array.from(item2.getElementsByTagName("NextKind"))){
-                        nextKinds.push(item3.getElementsByTagName("Sentence")[0].textContent);
+                    const sentence = item3.getElementsByTagName("Sentence")?.[0]?.textContent;
+                    if (sentence) nextKinds.push(sentence);
                       }
                       if (!nextKinds.length) nextKinds.push("");
                       for (const item3 of nextKinds) NewsOperator.add(title, item3, mainText);
-                      //t += AreaForecastLocalM.warn[$(int).find('Area Code').text()] + "に" + $($(int2).find('Name')[0]).text() + "発表　";
                     } else if (alertStatus === "特別警報から警報" || alertStatus === "特別警報から注意報"){
                       NewsOperator.add(title, "", "【 " + alertPlace + " 】 " + lastAlertType + " から " + alertType + " へ切り替え");
                     } else if (alertStatus === "警報から注意報"){
@@ -3152,48 +3020,39 @@ function weatherInfo(){
                     }
                   }
                 }
+          } catch (error) {
+            console.error("Loading Error (気象警報・注意報（Ｈ２７）)", error);
               }
-            });
           } else if (titleTextCotent === "気象警報・注意報（Ｒ０６）"){
             // やる気を見せる
           } else if (titleTextCotent === "竜巻注意情報"){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const performWeatherLoadEndAt = performance.now() * 1000;
                 for (const item of c.querySelectorAll('Body > Warning[type="竜巻注意情報（一次細分区域等）"] > Item')){
-                  if (item.querySelector('Kind > Code').textContent - 0){
-                    const area = AreaForecastLocalM.tornado[item.querySelector('Area > Code').textContent];
-                    const title = c.querySelector('Head > Title').textContent + (c.querySelector('Serial').textContent === "1" ? "　発表中" : "　継続中" );
-                    const description = c.querySelector('Head > Headline > Text').textContent;
+              if ((item.querySelector('Kind > Code')?.textContent ?? "0") - 0){
+                const area = AreaForecastLocalM.tornado[item.querySelector('Area > Code')?.textContent ?? ""];
+                const title = c.querySelector('Head > Title')?.textContent + ((c.querySelector('Serial')?.textContent ?? "") === "1" ? "　発表中" : "　継続中" );
+                const description = c.querySelector('Head > Headline > Text')?.textContent ?? "";
                     NewsOperator.add(title, description, area + "に竜巻注意情報が発表されています。");
                   }
                   SFXController.play(sounds.warning.Notice);
                 }
                 document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
-                // BNtitle.push("Hazardous wind watch is in effect.");
-                // 【竜巻注意情報（第3報）】山梨県中・西部、東部・富士五湖：06日19時50分まで有効
-                // Head > Serial : 第○報
-                // ValidDateTime : 有効期限
-              }
-            });
+          } catch (error) {
+            console.error("Loading Error (竜巻注意情報)", error);
+          }
           } else if (titleTextCotent.search("記録的短時間大雨情報") !== -1){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const performWeatherLoadEndAt = performance.now() * 1000;
-                if (c.querySelector('Headline > Information > Item > Kind > Condition').textContent !== "取消"){
+            if (c.querySelector('Headline > Information > Item > Kind > Condition')?.textContent !== "取消"){
                   try {
-                    const data = parseRainfallData(c.querySelector("Headline > Text").textContent);
-                    const areaen = AreaForecastLocalM.warning[c.querySelector("Headline Area > Code").textContent].en_US;
-                    if (!data.length) throw new Error("Error occurred while parsing text.");
-                    for (const current of data){
+                const text = c.querySelector("Headline > Text")?.textContent ?? "";
+                const dataParsed = parseRainfallData(text);
+                const areaen = AreaForecastLocalM.warning[c.querySelector("Headline Area > Code")?.textContent ?? ""]?.en_US;
+                if (!dataParsed.length) throw new Error("Error occurred while parsing text.");
+                for (const current of dataParsed){
                       const time = current.datetime;
                       const areajp = current.prefecture;
                       for (const event of current.locations){
@@ -3203,8 +3062,10 @@ function weatherInfo(){
                     }
                   } catch (e){
                     console.error(e);
-                    NewsOperator.add('記録的短時間大雨情報', c.querySelector('Report > Head > Title').textContent, c.querySelector('Headline > Text').textContent)
-                    NewsOperator.add('Heavy Rain Information', c.querySelector('Report > Head > Title').textContent, c.querySelector('Headline > Text').textContent)
+                const headTitle = c.querySelector('Report > Head > Title')?.textContent ?? "";
+                const headText = c.querySelector('Headline > Text')?.textContent ?? "";
+                NewsOperator.add('記録的短時間大雨情報', headTitle, headText);
+                NewsOperator.add('Heavy Rain Information', headTitle, headText);
                   }
                   if (elements.id.speechCheckboxVPOA50.checked) speechBase.start([
                     { type: "wait", time: 1000 },
@@ -3213,102 +3074,93 @@ function weatherInfo(){
                   SFXController.play(sounds.warning.HeavyRain);
                 }
                 document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+          } catch (error) {
+            console.error("Loading Error (記録的短時間大雨情報)", error);
               }
-            });
           } else if (titleTextCotent === "土砂災害警戒情報"){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const performWeatherLoadEndAt = performance.now() * 1000;
-                if ($(c).find('Headline > Information > Item > Kind > Condition').text() === "解除"){
-                  NewsOperator.add('土砂災害警戒情報　解除', c.querySelector("Headline > Text").textContent, "<土砂災害警戒情報 解除>　対象地域：" + c.querySelector('TargetArea > Name').textContent);
+            if (c.querySelector('Headline > Information > Item > Kind > Condition')?.textContent === "解除"){
+              NewsOperator.add('土砂災害警戒情報　解除', c.querySelector("Headline > Text")?.textContent, "<土砂災害警戒情報 解除>　対象地域：" + c.querySelector('TargetArea > Name')?.textContent);
                   if (elements.id.speechCheckboxGround.checked) speechBase.start([
-                    { type: "path", speakerId: "speaker8", path: "ground.area."+$(c).find('TargetArea > Code').text() },
+                { type: "path", speakerId: "speaker8", path: "ground.area."+(c.querySelector('TargetArea > Code')?.textContent ?? "") },
                     { type: "path", speakerId: "speaker8", path: "ground.clear" }
                   ]);
                 } else {
                   const headline = Array.from(c.querySelectorAll("Headline Item"));
                   for (const item of headline){
-                    const areatexts = [];
+                const areatexts = [] as string[];
                     let tekisutoooaaaaa = "";
                     for (const area of item.querySelectorAll("Area > Name").toArray()){
-                      tekisutoooaaaaa += " "+area.textContent;
+                  tekisutoooaaaaa += " "+(area.textContent ?? "");
                       if (tekisutoooaaaaa.length > 45) areatexts.push(tekisutoooaaaaa), tekisutoooaaaaa = "";
                     }
                     if (tekisutoooaaaaa) areatexts.push(tekisutoooaaaaa);
-                    const infoType = item.fun2("Kind > Condition").textContent;
-                    for (const area of areatexts) NewsOperator.add('土砂災害警戒情報　' + c.querySelector('TargetArea > Name').textContent, c.querySelector('Headline > Text').textContent, "［"+infoType+"］"+area);
+                const infoType = item.fun2("Kind > Condition")?.textContent ?? "";
+                for (const area of areatexts) NewsOperator.add('土砂災害警戒情報　' + (c.querySelector('TargetArea > Name')?.textContent ?? ""), c.querySelector('Headline > Text')?.textContent ?? "", "［"+infoType+"］"+area);
                     if (infoType === "発表" && elements.id.speechCheckboxGround.checked) speechBase.start([
                       { type: "wait", time: 500 },
-                      { type: "path", speakerId: "speaker8", path: "ground.area."+$(c).find('TargetArea > Code').text() },
+                  { type: "path", speakerId: "speaker8", path: "ground.area."+(c.querySelector('TargetArea > Code')?.textContent ?? "") },
                       { type: "path", speakerId: "speaker8", path: "ground.issue" }
                     ]);
                   }
                   SFXController.play(sounds.warning.GroundLoosening);
                 }
                 document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+          } catch (error) {
+            console.error("Loading Error (土砂災害警戒情報)", error);
               }
-            });
           } else if (titleTextCotent === "気象特別警報報知") {
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const performWeatherLoadEndAt = performance.now() * 1000;
-                if (c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Kind > Name').textContent !== "解除"){
+            if (c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Kind > Name')?.textContent !== "解除"){
                   NewsOperator.add('特別警報を発表中', '', '発表中の地域では、重大な危険が差し迫った異常な状況');
                   NewsOperator.add('Emergency weather warnings are in effect.', '', 'This is an extraordinary situation with serious potential for disaster conditions.');
                   const prefInfo = c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area');
                   for (const e2 of c.querySelectorAll('Head > Headline > Information[type="気象特別警報報知（市町村等）"] > Item')){
                     NewsOperator.add(
                       "【" + Array.from(e2.querySelectorAll('Kind > Name')).map(item => item.textContent).join("・") + "】",
-                      "", "［発表中］" + OfficeID2PrefName[prefInfo.querySelector('Code').textContent] + e2.querySelector('Areas > Area > Name').textContent
+                  "", "［発表中］" + OfficeID2PrefName[prefInfo?.querySelector('Code')?.textContent ?? ""] + e2.querySelector('Areas > Area > Name')?.textContent
                     );
                   }
                   if (elements.id.speechCheckboxSPwarn.checked) speechBase.start([
                     { type: "wait", time: 3500 },
-                    { type: "path", speakerId: "speaker8", path: "warning.prefecture." + prefInfo.querySelector('Code').textContent },
+                { type: "path", speakerId: "speaker8", path: "warning.prefecture." + (prefInfo?.querySelector('Code')?.textContent ?? "") },
                     { type: "path", speakerId: "speaker8", path: "warning.special_warn" }
                   ]);
                   SFXController.play(sounds.warning.Emergency);
                 } else {
-                  NewsOperator.add('特別警報は警報へ', '発表されていた特別警報は警報へ切り替えられましたが、引き続き最新情報にご注意ください。', '警報に切り替え：' + c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area > Name').textContent);
+              NewsOperator.add('特別警報は警報へ', '発表されていた特別警報は警報へ切り替えられましたが、引き続き最新情報にご注意ください。', '警報に切り替え：' + (c.querySelector('Head > Headline > Information[type="気象特別警報報知（府県予報区等）"] > Item > Areas > Area > Name')?.textContent ?? ""));
                 }
                 document.getElementById("dbPfWeather").innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+          } catch (error) {
+            console.error("Loading Error (気象特別警報報知)", error);
               }
-            });
           } else if (titleTextCotent === "指定河川洪水予報"){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const performWeatherLoadEndAt = performance.now() * 1000;
-                const level = Number($(c).find('Headline > Information[type="指定河川洪水予報（河川）"] Kind > Code').text());
+            const level = Number(c.querySelector('Headline > Information[type="指定河川洪水予報（河川）"] Kind > Code')?.textContent ?? "0");
                 if (ifrange(level, 50, 51)){
                   SFXController.play(sounds.warning.Flood5);
-                  const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name').textContent;
-                  const riverTitle = "【 " + c.querySelector("Head > Title").textContent + " / 警戒レベル５相当 】";
-                  NewsOperator.add(riverTitle, c.querySelector('Head > Headline > Text').textContent, riverAreaName + "では、氾濫が発生した模様。");
+              const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name')?.textContent;
+              const riverTitle = "【 " + c.querySelector("Head > Title")?.textContent + " / 警戒レベル５相当 】";
+              NewsOperator.add(riverTitle, c.querySelector('Head > Headline > Text')?.textContent, riverAreaName + "では、氾濫が発生した模様。");
                   for (const c2 of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
-                    const type = c2.querySelector("Property > Type").textContent;
+                const type = c2.querySelector("Property > Type")?.textContent;
                     switch (type){
                     case "主文":
                       if (c2.getElementsByTagName("Areas").length){
-                        NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text").textContent, "対象の水位観測所： "+c2.querySelector("Areas > Area > Name").textContent+" "+c2.querySelector("Stations > Station > Name").textContent+"水位観測所 （"+c2.querySelector("Stations > Station > Location").textContent+"）");
+                    NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text")?.textContent, "対象の水位観測所： "+c2.querySelector("Areas > Area > Name")?.textContent+" "+c2.querySelector("Stations > Station > Name")?.textContent+"水位観測所 （"+c2.querySelector("Stations > Station > Location")?.textContent+"）");
                       } else {
-                        NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text").textContent, riverAreaName + "で氾濫発生。すぐに安全の確保をしてください。");
+                    NewsOperator.add(riverTitle, c2.querySelector("Kind > Property > Text")?.textContent, riverAreaName + "で氾濫発生。すぐに安全の確保をしてください。");
                       }
                       break;
                     case "浸水想定地区":
                       for (const e2 of c2.querySelectorAll("Areas > Area")){
-                        const areaName = e2.getElementsByTagName("City")[0].textContent + e2.getElementsByTagName("Name")[0].textContent;
+                    const areaName = e2.getElementsByTagName("City")?.[0]?.textContent + e2.getElementsByTagName("Name")?.[0]?.textContent;
                         NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
                       }
                       break;
@@ -3316,18 +3168,18 @@ function weatherInfo(){
                   }
                 } else if(ifrange(level, 40, 41)){
                   SFXController.play(sounds.warning.Flood4);
-                  const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name').textContent;
-                  const riverTitle = "【 " + c.querySelector('Head > Title').textContent + " / 警戒レベル４相当 】";
-                  NewsOperator.add(riverTitle, c.querySelector('Headline > Text').textContent, "対象河川： " + riverAreaName);
+              const riverAreaName = c.querySelector('Headline > Information[type="指定河川洪水予報（予報区域）"] > Item > Areas > Area > Name')?.textContent;
+              const riverTitle = "【 " + c.querySelector('Head > Title')?.textContent + " / 警戒レベル４相当 】";
+              NewsOperator.add(riverTitle, c.querySelector('Headline > Text')?.textContent, "対象河川： " + riverAreaName);
                   for (const e of c.querySelectorAll('Body > Warning[type="指定河川洪水予報"] > Item')){
-                    const type = e.querySelector("Property > Type").textContent;
+                const type = e.querySelector("Property > Type")?.textContent;
                     switch (type){
                     case "主文":
-                      NewsOperator.add(riverTitle, e.querySelector("Property > Text").textContent, "対象の水位観測所： " + e.querySelector("Areas > Area > Name").textContent + " " + e.querySelector("Stations > Station > Name").textContent + "水位観測所 （" + e.querySelector("Stations > Station > Location").textContent + "）");
+                  NewsOperator.add(riverTitle, e.querySelector("Property > Text")?.textContent, "対象の水位観測所： " + e.querySelector("Areas > Area > Name")?.textContent + " " + e.querySelector("Stations > Station > Name")?.textContent + "水位観測所 （" + e.querySelector("Stations > Station > Location")?.textContent + "）");
                       break;
                     case "浸水想定地区":
                       for (const e2 of e.querySelectorAll("Areas > Area")){
-                        const areaName = e2.getElementsByTagName("City")[0].textContent + e2.getElementsByTagName("Name")[0].textContent;
+                    const areaName = e2.getElementsByTagName("City")?.[0]?.textContent + e2.getElementsByTagName("Name")?.[0]?.textContent;
                         NewsOperator.add(riverTitle, "", "［氾濫による浸水に注意］ " + areaName, { duration: 4500 });
                       }
                       break;
@@ -3335,20 +3187,17 @@ function weatherInfo(){
                   }
                 }
                 elements.id.dbPfDrawing.innerText = "気象情報処理セクション：" + (window.performance.now()*1000-performWeatherStartAt) + "ms (Load: " + (performWeatherLoadEndAt-performWeatherLoadStartAt) + "μs)";
+          } catch (error) {
+            console.error("Loading Error (指定河川洪水予報)", error);
               }
-            });
           } else if (titleTextCotent === "全般台風情報"){
-            $.ajax({
-              type: 'GET',
-              url: linkAttrHref,
-              dataType: 'xml',
-              cache: true,
-              success: function(c){
+          try {
+            const c = await fetchXmlWithTimeout(linkAttrHref, 15000, 'no-cache');
                 const texts = c.getElementsByTagName("Text");
-                const headcomment = texts[0].textContent.replaceAll(/(\s){1,}/g,"　").trim().split("。").slice(0, -1).map(line => line + "。");
-                let bodycomment = texts[1].textContent.split("\n\n").map(text => text.replaceAll(/(\s){1,}/g,"　"));
+            const headcomment = (texts?.[0]?.textContent ?? "").replaceAll(/(\s){1,}/g,"　").trim().split("。").slice(0, -1).map(line => line + "。");
+            let bodycomment = (texts?.[1]?.textContent ?? "").split("\n\n").map(text => text.replaceAll(/(\s){1,}/g,"　"));
                 if (bodycomment[0] === "なし") bodycomment = [""];
-                const title = c.querySelector("Head > Title").textContent;
+            const title = c.querySelector("Head > Title")?.textContent;
                 for (const line of headcomment){
                   NewsOperator.add(title, "全般台風情報　ヘッドライン", line);
                 }
@@ -3356,17 +3205,16 @@ function weatherInfo(){
                   const item = bodycomment[key];
                   NewsOperator.add(title, item, "", {duration: item.length * 150});
                 }
+          } catch (error) {
+            console.error("Loading Error (全般台風情報)", error);
               }
-            });
           }
         }
-      });
-      weatherlink = arr;
-    },
-    error: (XMLHttpRequest, textStatus, errorThrown) => {
-      if (textStatus === "timeout") console.warn("接続がタイムアウトしました。("+XMLHttpRequest.status+")"); else errorCollector.collect("XMLHttpRequestでエラーが発生しました。isTrustedはundefinedです。\nRequest Type: WeatherInformation / Timeout: 0(ms)");
     }
-  });
+      weatherlink = arr;
+  } catch (error) {
+    console.error("Loading Error (weatherInfo)", error);
+    }
 }
 weatherInfo.tracker = new TrafficTracker("JMA / 気象情報 一覧");
 
@@ -3533,13 +3381,13 @@ function load_quake_event_v2(event_id){
         q_depth = data.depth;
         if(q_depth === "0") q_depth = "ごく浅い";
         q_epiName = data.hypocenter.name;
-        $('#menu .eiwind').removeClass('SI');
+        document.querySelectorAll<HTMLElement>('#menu .eiwind').forEach(el => el.classList.remove('SI'));
       } else {
         q_magnitude = "--";
         q_epiName = "-------------";
         q_depth = "--";
         q_epiIdx = 343;
-        $('#menu .eiwind').addClass('SI');
+        document.querySelectorAll<HTMLElement>('#menu .eiwind').forEach(el => el.classList.add('SI'));
       }
 
       quakeText = ["","","","","","","","","","",""];
@@ -4218,7 +4066,12 @@ document.getElementById("into-fullscreen").addEventListener('click', function(){
 });
 
 document.getElementsByName("skipMessage")[0].addEventListener('click', function(){textOffsetX = -9007199254740000;});
-document.getElementsByName("tmpSH-btn")[0].addEventListener('click', function(){$('.template-box').toggle();});
+document.getElementsByName("tmpSH-btn")[0].addEventListener('click', function(){
+  const tmplBox = document.querySelector<HTMLElement>('.template-box');
+  if (!tmplBox) return;
+  const isVisible = getComputedStyle(tmplBox).display !== 'none';
+  tmplBox.style.display = isVisible ? 'none' : '';
+});
 document.getElementsByName("tmpl-button")[0].addEventListener('click', function(){quakeTemplateView(1); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 document.getElementsByName("tmpl-button")[1].addEventListener('click', function(){quakeTemplateView(2); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 document.getElementsByName("tmpl-button")[2].addEventListener('click', function(){quakeTemplateView(3); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});

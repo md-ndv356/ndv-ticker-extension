@@ -1,7 +1,6 @@
 // Global declarations for legacy popup scripts loaded via index.html.
 // Keep this lightweight; refine types as modules are migrated to TypeScript.
 
-import type { JQueryStatic } from 'jquery';
 import type { DataOperatorPublic, TsunamiOperator, TyphCommentOperator, WarnCurrentOperator, TrafficTracker as TrafficTrackerClass } from '../popup/data/jmaDataOperator';
 
 // Quake list samples: db/20240101_quake/quake_list1.json, db/20240101_quake/quake_list2.json,
@@ -304,8 +303,6 @@ export type JmaQuakeReport = {
 };
 
 declare global {
-  const $: JQueryStatic;
-
   // Canvas context defined in init-canvas.js
   const context: CanvasRenderingContext2D;
 
