@@ -1,9 +1,14 @@
 'use strict';
 
 import { RequestURL } from './data/requestURL';
+import './data/jmaDataOperator';
 import { getRiverPoints } from './data/riverPoints';
 import { multilingualQuake } from './data/multilingual-quake';
-import { renderQuakeView } from './routines/quakeView';
+import { renderQuakeView, quakeRenderState, prepareQuakeState } from './routines/quakeView';
+import { renderEewView } from './routines/eewView';
+import { renderNormalTitle } from './routines/normalView';
+import { NewsOperator, renderNewsView, renderNewsStandbyList, renderNewsTitle } from './routines/newsView';
+import { advanceTsunamiPage, createTsunamiOverlayState, renderTsunamiOverlay, setTsunamiCancelled, setTsunamiIssued, updateTsunamiList } from './routines/tsunamiView';
 
 // import easyXhr from "./modules/easyXhr.js";
 
@@ -125,6 +130,7 @@ showInitStatus("Getting ready, just a moment...");
 window.resizeTo(1240 * window.outerWidth / window.innerWidth, window.outerHeight);
 
 const Data = {};
+void Data;
 
 // プラットフォームに合わせて最大化時のフレーム幅を調整
 let PlatformOS = null;
@@ -169,7 +175,7 @@ const elements = {
     masterGainOutput: document.getElementById("master-gain-output") as HTMLSpanElement,
     gainTimer: document.getElementById("settings-gain-timer") as HTMLUListElement,
     gainTimers: [] as DOMGainTimerItem[],
-    scheduleAdd: document.getElementById("schedule-add") as HTMLImageElement,
+    scheduleAdd: document.getElementById("schedule-add") as unknown as HTMLImageElement,
     volEEWl1: document.getElementById('volEEWl1') as HTMLInputElement,
     volEEWl5: document.getElementById('volEEWl5') as HTMLInputElement,
     volEEWl9: document.getElementById('volEEWl9') as HTMLInputElement,
@@ -433,9 +439,11 @@ var textOffsetX = 1200;
 
 var quakeText = ["","","","","","","","","","",""];
 // epicenter list of JMA
-const EpiNameList_JMA = ["石狩地方北部","石狩地方中部","石狩地方南部","後志地方北部","後志地方東部","後志地方西部","空知地方北部","空知地方中部","空知地方南部","渡島地方北部","渡島地方東部","渡島地方西部","檜山地方","北海道奥尻島","胆振地方西部","胆振地方中東部","日高地方西部","日高地方中部","日高地方東部","上川地方北部","上川地方中部","上川地方南部","留萌地方中北部","留萌地方南部","宗谷地方北部","宗谷地方南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝地方北部","十勝地方中部","十勝地方南部","釧路地方北部","釧路地方中南部","根室地方北部","根室地方中部","根室地方南部","青森県津軽北部","青森県津軽南部","青森県三八上北","青森県下北","岩手県沿岸北部","岩手県沿岸南部","岩手県内陸北部","岩手県内陸南部","宮城県北部","宮城県中部","宮城県南部","秋田県沿岸北部","秋田県沿岸南部","秋田県内陸北部","秋田県内陸南部","山形県庄内","山形県最上","山形県村山","山形県置賜","福島県中通り","福島県浜通り","福島県会津","茨城県北部","茨城県南部","栃木県北部","栃木県南部","群馬県北部","群馬県南部","埼玉県北部","埼玉県南部","埼玉県秩父","千葉県北東部","千葉県北西部","千葉県南部","東京都２３区","東京都多摩東部","東京都多摩西部","伊豆大島","新島","神津島","三宅島","八丈島","小笠原","神奈川県東部","神奈川県西部","新潟県上越","新潟県中越","新潟県下越","新潟県佐渡","富山県東部","富山県西部","石川県能登","石川県加賀","福井県嶺北","福井県嶺南","山梨県東部・富士五湖","山梨県中・西部","長野県北部","長野県中部","長野県南部","岐阜県飛騨","岐阜県美濃東部","岐阜県美濃中西部","伊豆地方","静岡県東部","静岡県中部","静岡県西部","愛知県東部","愛知県西部","三重県北部","三重県中部","三重県南部","滋賀県北部","滋賀県南部","京都府北部","京都府南部","大阪府北部","大阪府南部","兵庫県北部","兵庫県南東部","兵庫県南西部","兵庫県淡路島","奈良県","和歌山県北部","和歌山県南部","鳥取県東部","鳥取県中部","鳥取県西部","島根県東部","島根県西部","島根県隠岐","岡山県北部","岡山県南部","広島県北部","広島県南東部","広島県南西部","山口県北部","山口県東部","山口県中部","山口県西部","徳島県北部","徳島県南部","香川県東部","香川県西部","愛媛県東予","愛媛県中予","愛媛県南予","高知県東部","高知県中部","高知県西部","福岡県福岡","福岡県北九州","福岡県筑豊","福岡県筑後","佐賀県北部","佐賀県南部","長崎県北部","長崎県南西部","長崎県島原半島","長崎県対馬","長崎県壱岐","長崎県五島","熊本県阿蘇","熊本県熊本","熊本県球磨","熊本県天草・芦北","大分県北部","大分県中部","大分県南部","大分県西部","宮崎県北部平野部","宮崎県北部山沿い","宮崎県南部平野部","宮崎県南部山沿い","鹿児島県薩摩","鹿児島県大隅","鹿児島県十島村","鹿児島県甑島","鹿児島県種子島","鹿児島県屋久島","鹿児島県奄美北部","鹿児島県奄美南部","沖縄県本島北部","沖縄県本島中南部","沖縄県久米島","沖縄県大東島","沖縄県宮古島","沖縄県石垣島","沖縄県与那国島","沖縄県西表島"];
+const _EpiNameList_JMA = ["石狩地方北部","石狩地方中部","石狩地方南部","後志地方北部","後志地方東部","後志地方西部","空知地方北部","空知地方中部","空知地方南部","渡島地方北部","渡島地方東部","渡島地方西部","檜山地方","北海道奥尻島","胆振地方西部","胆振地方中東部","日高地方西部","日高地方中部","日高地方東部","上川地方北部","上川地方中部","上川地方南部","留萌地方中北部","留萌地方南部","宗谷地方北部","宗谷地方南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝地方北部","十勝地方中部","十勝地方南部","釧路地方北部","釧路地方中南部","根室地方北部","根室地方中部","根室地方南部","青森県津軽北部","青森県津軽南部","青森県三八上北","青森県下北","岩手県沿岸北部","岩手県沿岸南部","岩手県内陸北部","岩手県内陸南部","宮城県北部","宮城県中部","宮城県南部","秋田県沿岸北部","秋田県沿岸南部","秋田県内陸北部","秋田県内陸南部","山形県庄内","山形県最上","山形県村山","山形県置賜","福島県中通り","福島県浜通り","福島県会津","茨城県北部","茨城県南部","栃木県北部","栃木県南部","群馬県北部","群馬県南部","埼玉県北部","埼玉県南部","埼玉県秩父","千葉県北東部","千葉県北西部","千葉県南部","東京都２３区","東京都多摩東部","東京都多摩西部","伊豆大島","新島","神津島","三宅島","八丈島","小笠原","神奈川県東部","神奈川県西部","新潟県上越","新潟県中越","新潟県下越","新潟県佐渡","富山県東部","富山県西部","石川県能登","石川県加賀","福井県嶺北","福井県嶺南","山梨県東部・富士五湖","山梨県中・西部","長野県北部","長野県中部","長野県南部","岐阜県飛騨","岐阜県美濃東部","岐阜県美濃中西部","伊豆地方","静岡県東部","静岡県中部","静岡県西部","愛知県東部","愛知県西部","三重県北部","三重県中部","三重県南部","滋賀県北部","滋賀県南部","京都府北部","京都府南部","大阪府北部","大阪府南部","兵庫県北部","兵庫県南東部","兵庫県南西部","兵庫県淡路島","奈良県","和歌山県北部","和歌山県南部","鳥取県東部","鳥取県中部","鳥取県西部","島根県東部","島根県西部","島根県隠岐","岡山県北部","岡山県南部","広島県北部","広島県南東部","広島県南西部","山口県北部","山口県東部","山口県中部","山口県西部","徳島県北部","徳島県南部","香川県東部","香川県西部","愛媛県東予","愛媛県中予","愛媛県南予","高知県東部","高知県中部","高知県西部","福岡県福岡","福岡県北九州","福岡県筑豊","福岡県筑後","佐賀県北部","佐賀県南部","長崎県北部","長崎県南西部","長崎県島原半島","長崎県対馬","長崎県壱岐","長崎県五島","熊本県阿蘇","熊本県熊本","熊本県球磨","熊本県天草・芦北","大分県北部","大分県中部","大分県南部","大分県西部","宮崎県北部平野部","宮崎県北部山沿い","宮崎県南部平野部","宮崎県南部山沿い","鹿児島県薩摩","鹿児島県大隅","鹿児島県十島村","鹿児島県甑島","鹿児島県種子島","鹿児島県屋久島","鹿児島県奄美北部","鹿児島県奄美南部","沖縄県本島北部","沖縄県本島中南部","沖縄県久米島","沖縄県大東島","沖縄県宮古島","沖縄県石垣島","沖縄県与那国島","沖縄県西表島"];
 // epicenter list of NHK
-const EpiNameList_NHK = ["石狩北部","石狩中部","石狩南部","後志北部","後志東部","後志西部","空知北部","空知中部","空知南部","渡島北部","渡島東部","渡島西部","檜山地方","北海道奥尻島","胆振西部","胆振中東部","日高西部","日高中部","日高東部","上川地方北部","上川地方中部","上川地方南部","留萌中北部","留萌南部","宗谷北部","宗谷南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝北部","十勝中部","十勝南部","釧路北部","釧路中南部","根室北部","根室中部","根室南部","津軽北部","津軽南部","青森三八上北","青森下北","岩手沿岸北部","岩手沿岸南部","岩手内陸北部","岩手内陸南部","宮城北部","宮城中部","宮城南部","秋田沿岸北部","秋田沿岸南部","秋田内陸北部","秋田内陸南部","山形庄内地方","山形最上地方","山形村山地方","山形置賜地方","福島中通り","福島浜通り","会津","茨城北部","茨城南部","栃木北部","栃木南部","群馬北部","群馬南部","埼玉北部","埼玉南部","秩父地方","千葉北東部","千葉北西部","千葉南部","東京２３区","東京多摩東部","東京多摩西部","伊豆大島","新島地方","神津島","三宅島","八丈島","小笠原","神奈川東部","神奈川西部","新潟上越地方","新潟中越地方","新潟下越地方","佐渡地方","富山東部","富山西部","能登地方","加賀地方","福井嶺北地方","福井嶺南地方","山梨東部・富士五湖","山梨中・西部","長野北部","長野中部","長野南部","飛騨地方","美濃東部","美濃中西部","伊豆地方","静岡東部","静岡中部","静岡西部","愛知東部","愛知西部","三重北部","三重中部","三重南部","滋賀北部","滋賀南部","京都北部","京都南部","大阪北部","大阪南部","兵庫北部","兵庫南東部","兵庫南西部","淡路島","奈良県","和歌山北部","和歌山南部","鳥取東部","鳥取中部","鳥取西部","島根東部","島根西部","隠岐","岡山北部","岡山南部","広島北部","広島南東部","広島南西部","山口北部","山口東部","山口中部","山口西部","徳島北部","徳島南部","香川東部","香川西部","愛媛東予地方","愛媛中予地方","愛媛南予地方","高知東部","高知中部","高知西部","福岡地方","北九州地方","筑豊地方","筑後地方","佐賀北部","佐賀南部","長崎北部","長崎南西部","島原半島","対馬地方","壱岐地方","五島地方","阿蘇地方","熊本地方","球磨地方","天草・芦北","大分北部","大分中部","大分南部","大分西部","宮崎北部平野部","宮崎北部山沿い","宮崎南部平野部","宮崎南部山沿い","薩摩地方","大隅地方","十島村","甑島","種子島地方","屋久島地方","奄美北部","奄美南部","沖縄本島北部","沖縄本島中南部","久米島","大東島","宮古島","石垣島","与那国島","西表島"];
+const _EpiNameList_NHK = ["石狩北部","石狩中部","石狩南部","後志北部","後志東部","後志西部","空知北部","空知中部","空知南部","渡島北部","渡島東部","渡島西部","檜山地方","北海道奥尻島","胆振西部","胆振中東部","日高西部","日高中部","日高東部","上川地方北部","上川地方中部","上川地方南部","留萌中北部","留萌南部","宗谷北部","宗谷南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝北部","十勝中部","十勝南部","釧路北部","釧路中南部","根室北部","根室中部","根室南部","津軽北部","津軽南部","青森三八上北","青森下北","岩手沿岸北部","岩手沿岸南部","岩手内陸北部","岩手内陸南部","宮城北部","宮城中部","宮城南部","秋田沿岸北部","秋田沿岸南部","秋田内陸北部","秋田内陸南部","山形庄内地方","山形最上地方","山形村山地方","山形置賜地方","福島中通り","福島浜通り","会津","茨城北部","茨城南部","栃木北部","栃木南部","群馬北部","群馬南部","埼玉北部","埼玉南部","秩父地方","千葉北東部","千葉北西部","千葉南部","東京２３区","東京多摩東部","東京多摩西部","伊豆大島","新島地方","神津島","三宅島","八丈島","小笠原","神奈川東部","神奈川西部","新潟上越地方","新潟中越地方","新潟下越地方","佐渡地方","富山東部","富山西部","能登地方","加賀地方","福井嶺北地方","福井嶺南地方","山梨東部・富士五湖","山梨中・西部","長野北部","長野中部","長野南部","飛騨地方","美濃東部","美濃中西部","伊豆地方","静岡東部","静岡中部","静岡西部","愛知東部","愛知西部","三重北部","三重中部","三重南部","滋賀北部","滋賀南部","京都北部","京都南部","大阪北部","大阪南部","兵庫北部","兵庫南東部","兵庫南西部","淡路島","奈良県","和歌山北部","和歌山南部","鳥取東部","鳥取中部","鳥取西部","島根東部","島根西部","隠岐","岡山北部","岡山南部","広島北部","広島南東部","広島南西部","山口北部","山口東部","山口中部","山口西部","徳島北部","徳島南部","香川東部","香川西部","愛媛東予地方","愛媛中予地方","愛媛南予地方","高知東部","高知中部","高知西部","福岡地方","北九州地方","筑豊地方","筑後地方","佐賀北部","佐賀南部","長崎北部","長崎南西部","島原半島","対馬地方","壱岐地方","五島地方","阿蘇地方","熊本地方","球磨地方","天草・芦北","大分北部","大分中部","大分南部","大分西部","宮崎北部平野部","宮崎北部山沿い","宮崎南部平野部","宮崎南部山沿い","薩摩地方","大隅地方","十島村","甑島","種子島地方","屋久島地方","奄美北部","奄美南部","沖縄本島北部","沖縄本島中南部","久米島","大東島","宮古島","石垣島","与那国島","西表島"];
+void _EpiNameList_JMA.length;
+void _EpiNameList_NHK.length;
 // 緊急地震速報の文
 const eewWarnTextList = [] as {ja: string[]; en: string[]}[];
 for (let i = 33; i < 56; i++){
@@ -457,9 +465,8 @@ type NormalItem = { title: string; message: string };
 // variables for weather informations
 var textSpeed = 5,
     viewMode = 0,
-    language = "Ja",
     timeCount = 0,
-    var directTexts = [
+    directTexts = [
       '<weather/temperature/high>',
       '<weather/temperature/low>',
       '<weather/rain/1h>',
@@ -492,6 +499,14 @@ var textSpeed = 5,
         directTexts[5 + i] = normalItems[i]?.title ?? "";
       }
     };
+
+    const syncNormalItemsFromDirectTexts = () => {
+      // MIG-TEMP: Keep normalItems in sync when legacy directTexts are mutated elsewhere.
+      for (let i = 0; i < normalItems.length; i++){
+        normalItems[i].message = directTexts[i] ?? "";
+        normalItems[i].title = directTexts[5 + i] ?? "";
+      }
+    };
 // earthquake variables
 var q_msiText = shindoListJP[q_maxShindo],
     q_magnitude = "",
@@ -513,80 +528,27 @@ var eewEpicenter = '',
     eewCalcintensity = '',
     eewCalcIntensityIndex = '',
     eewDepth = '',
-    eewAlertFlgText = '',
-    eewCancelText = '',
+  _eewAlertFlgText = '',
+  _eewCancelText = '',
     eewMagnitude = '',
     eewReportNumber = '',
     eewReportID = '',
     eewIsFinal = true,
-    eewIsTraning = false,
+  _eewIsTraning = false,
     eewIsCancel = false,
     eewIsAlert = false,
-    eewAt = new Date("2000/01/01 00:00:00"),
+  _eewAt = new Date("2000/01/01 00:00:00"),
     eewEpicenterID = "",
-    eewIsSea = false,
+  _eewIsSea = false,
     eewIsAssumption = false,
     eewWarnForecast = "",
     // eewAboutHypocenter = "",
     eewClassCode = null as number | null;
-// int
-var i = 0,
-    i2 = 0;
-
-type NewsItem = {
-  title?: string;
-  description?: string;
-  detail?: string;
-  duration?: number;
-};
-const NewsOperator = {
-  standby: [] as NewsItem[],
-  endTime: 0,
-  middleWidth: -1,
-  viewDuration: 18000,
-  DEFAULT_DURATION: 18000,
-  viewing: {
-    title: "",
-    description: "",
-    detail: "",
-    duration: 0
-  } as NewsItem,
-  clearAll: function (){
-    this.standby = [];
-    this.endTime = 0;
-    this.middleWidth = -1;
-  },
-  next: function (){
-    this.middleWidth = -1;
-    this.endTime = 0;
-    if (this.standby.length && viewMode !== 1){
-      this.viewing.title = this.standby[0].title ?? "";
-      this.viewing.description = this.standby[0].description ?? "";
-      this.viewing.detail = this.standby[0].detail ?? "";
-      this.viewDuration = this.standby[0].duration ?? this.DEFAULT_DURATION;
-      this.standby.shift();
-      this.endTime = Date.now() + this.viewDuration;
-      SetMode(3);
-    }
-    return !!this.endTime;
-  },
-  add: function (title: string, description: string, detail: string, {repeat = 1, duration = 18000} = {}){
-    for (let i=0; i<repeat; i++) this.standby.push({title, description, detail, duration});
-    if (!this.endTime) this.next();
-  },
-  /**
-   * @return {Number} 1→0に
-   */
-  get progress (){
-    return (this.endTime - Date.now()) / this.viewDuration;
-  }
-};
 // tsunami information
-var t_Cancelled = true,
-    t_lastId,
-    t_page = 0,
-    t_obsUpdateTime = 0,
+var _t_lastId,
+    _t_obsUpdateTime = 0,
     t_viewType = 2;
+const tsunamiOverlayState = createTsunamiOverlayState();
 var systemTimeLag = 0; // ミリ秒単位
 
 var riverlevel = new Array(7);
@@ -594,40 +556,44 @@ var rivertext = ["","","","","","",""];
 rivertext[0] = "wfi";
 var riveralltext = "";
 const riverPointsPromise = getRiverPoints();
+void _eewAlertFlgText;
+void _eewCancelText;
+void _eewIsTraning;
+void _eewAt;
+void _eewIsSea;
+void _t_lastId;
+void _t_obsUpdateTime;
 
 // 情報の読み込みを管理するオブジェクトです。
 type XHRItem = {
-  body: XMLHttpRequest;
+  body: XhrWithExtras;
   load: () => void;
   timeout: number;
-  tracker: typeof TrafficTracker;
+  tracker: any;
   parent?: any;
 }
 
 // Runtime-added properties on XMLHttpRequest used throughout this file.
-interface XMLHttpRequest {
-  parent?: XHRItem;
-  original?: any;
-}
+type XhrWithExtras = XMLHttpRequest & { parent?: XHRItem; original?: any; timeout: number };
 
 const XHRs = {
-  diderr: function (this: XMLHttpRequest, event: ProgressEvent<XMLHttpRequestEventTarget>){
-    const xhr = (event.currentTarget ?? this) as XMLHttpRequest;
+  diderr: function (this: XhrWithExtras, event: ProgressEvent<XMLHttpRequestEventTarget>){
+    const xhr = (event.currentTarget ?? this) as XhrWithExtras;
     const parent = xhr.parent;
     const viewName = parent?.tracker?.viewName ?? "Unknown";
     const timeout = parent?.timeout ?? xhr.timeout;
 
     errorCollector.collect("(" + event.timeStamp + ") XMLHttpRequestでエラーが発生しました。isTrustedは"+errorCollector.true_or_false(event.isTrusted)+"です。\nRequest Type: " + viewName + " / Timeout: " + timeout + "(ms)");
   },
-  didtimeout: function (this: XMLHttpRequest, event: ProgressEvent<XMLHttpRequestEventTarget>){
-    const xhr = (event.currentTarget ?? this) as XMLHttpRequest;
+  didtimeout: function (this: XhrWithExtras, event: ProgressEvent<XMLHttpRequestEventTarget>){
+    const xhr = (event.currentTarget ?? this) as XhrWithExtras;
     const parent = xhr.parent;
     const timeout = parent?.timeout ?? xhr.timeout;
 
     console.warn("タイムアウトです。\n" + timeout + "ミリ秒が経過したため、読み込みは中断されました。")
   },
   mscale: {
-    body: new XMLHttpRequest(),
+    body: new XMLHttpRequest() as XhrWithExtras,
     load: function(){
       this.body.timeout = this.timeout;
       this.body.open("GET", RequestURL.wni_mscale+'?_='+new Date().getTime());
@@ -637,7 +603,7 @@ const XHRs = {
     tracker: new TrafficTracker("WNI / Mスケール")
   },
   getJMAforecast: {
-    body: new XMLHttpRequest(),
+    body: new XMLHttpRequest() as XhrWithExtras,
     load: function(){
       // this.body.timeout = this.timeout;
       // this.body.open("GET", 'https://www.jma.go.jp/bosai/forecast/data/forecast/map.json?'+new Date().getTime());
@@ -647,7 +613,7 @@ const XHRs = {
     tracker: new TrafficTracker("JMA / 天気予報")
   },
   river: {
-    body: new XMLHttpRequest(),
+    body: new XMLHttpRequest() as XhrWithExtras,
     load: function(){
       this.body.timeout = this.timeout;
       this.body.open("GET", RequestURL.wni_river+'?'+new Date().getTime());
@@ -658,8 +624,8 @@ const XHRs = {
   }
 };
 XHRs.mscale.body.parent = XHRs.mscale;
-XHRs.mscale.body.addEventListener("load", function(){
-  let json = JSON.parse(this.response);
+XHRs.mscale.body.addEventListener("load", function(this: XhrWithExtras){
+  const json = JSON.parse(this.response);
   this.parent!.tracker.update();
   if(mscale !== json.mscale-1) SetMscale(json.mscale - 1);
 });
@@ -670,7 +636,7 @@ XHRs.getJMAforecast.body.addEventListener("load", function(){});
 XHRs.getJMAforecast.body.addEventListener("error", XHRs.diderr);
 XHRs.getJMAforecast.body.addEventListener("timeout", XHRs.didtimeout);
 XHRs.river.body.parent = XHRs.river;
-XHRs.river.body.addEventListener("load", async function(){
+XHRs.river.body.addEventListener("load", async function(this: XhrWithExtras){
   const riverPoints = await riverPointsPromise;
   if (!riverPoints) return;
   let riverWarnDatas = [];
@@ -712,7 +678,7 @@ XHRs.river.body.addEventListener("load", async function(){
   riverlevel[6] = riverWarnDatas.filter(function(arr){ return arr.rank == "5" });
   for(var i=1; i<7; i++){
     if(riverlevel[i].length) rivertext[i] = "　　【河川水位情報 "+["平常","水防団待機水位","氾濫注意水位","出動水位","避難判断水位","氾濫危険水位","計画高水位"][i]+"】　"; else rivertext[i] = "";
-    rivertext[i] += riverlevel[i].map((a)=>{return a.point_name}).join("　/　");
+    rivertext[i] += riverlevel[i].map((a: any)=>{return a.point_name}).join("　/　");
   }
   rivertext[0] = "";
   riveralltext = arrayCombining(rivertext);
@@ -766,7 +732,7 @@ type BackMscItem = {
   storage?: BackMscStorage | any;
 }
 
-const images = {
+const images: any = {
   eew: {
     fc: new Image(),
     pub: new Image(),
@@ -792,7 +758,7 @@ const images = {
       ]
     ],
     texts: {
-      maxInt: [],
+      maxInt: [] as Array<{ ja: HTMLImageElement[]; en: HTMLImageElement[] }>,
       magni: new Image(),
       magni2: new Image(),
       depth: {
@@ -856,9 +822,9 @@ const textureFonts = images.texture as Record<string, any>;
     let baseurl = "/src/public/image/texture/"+s.base+"_"+s.px+"px"+(s.weight?"_"+s.weight:"");
     if(!target.data){
       target.data = {};
-      const xhr = new XMLHttpRequest();
+      const xhr: XhrWithExtras = new XMLHttpRequest() as XhrWithExtras;
       xhr.original = s;
-      xhr.addEventListener("load", function(){
+      xhr.addEventListener("load", function(this: XhrWithExtras){
         console.log("Loaded: " + this.responseURL);
         const json = JSON.parse(this.response) as {
           name: string;
@@ -982,8 +948,10 @@ const DrawTextureText = (text: string, x: number, y: number, option: DrawTexture
   }
 };
 
-interface HTMLImageElement {
-  toImageData(): ImageData;
+declare global {
+  interface HTMLImageElement {
+    toImageData(): ImageData;
+  }
 }
 
 type DrawTextureImageAPI = {
@@ -1079,20 +1047,21 @@ const __drawTextureImage = (function(){
 
 const sorabtn_qr_img = new Image();
 {
-  const onImageLoaded = function (this: HTMLImageElement){
-    const target = this as TextureImageWithBitmap;
+  const onImageLoaded = (ev: Event) => {
+    const target = ev.currentTarget as TextureImageWithBitmap | null;
+    if (!target) return;
     if (!("imgBmp" in target)) target.imgBmp = undefined;
     createImageBitmap(target).then((bmp) => {
       target.imgBmp = bmp;
     });
-  }
-  sorabtn_qr_img.onload = onImageLoaded; sorabtn_qr_img.src = "/src/public/image/sorabtn.png";
-  images.eew.fc.onload = onImageLoaded; images.eew.fc.src = "/src/public/image/eew1234.png";
-  images.eew.pub.onload = onImageLoaded; images.eew.pub.src = "/src/public/image/eew567.png";
-  images.eew.cancel.onload = onImageLoaded; images.eew.cancel.src = "/src/public/image/eewCancelled.png";
+  };
+  sorabtn_qr_img.addEventListener("load", onImageLoaded); sorabtn_qr_img.src = "/src/public/image/sorabtn.png";
+  images.eew.fc.addEventListener("load", onImageLoaded); images.eew.fc.src = "/src/public/image/eew1234.png";
+  images.eew.pub.addEventListener("load", onImageLoaded); images.eew.pub.src = "/src/public/image/eew567.png";
+  images.eew.cancel.addEventListener("load", onImageLoaded); images.eew.cancel.src = "/src/public/image/eewCancelled.png";
   for (let i=0; i<3; i++) for (let j=0; j<3; j++) {
     const img = images.quake.title[i][j];
-    img.onload = onImageLoaded;
+    img.addEventListener("load", onImageLoaded);
     img.src = "/src/public/image/theme"+i+"quakeTop"+j+".png";
   }
   for (let i=0; i<3; i++) {
@@ -1131,27 +1100,37 @@ function getAdjustedDate(){
 
 // main variables
 var soraopen_moving = 1081;
-var soraopen_move = null;
-var intervalArray = [];
+var soraopen_move: any = null;
+var intervalArray: any[] = [];
 var soraopen_color = 0;
+var sorabtn_last_reading = 0;
+var sorabtn_now_reading = false;
+var sorabtn_reading_done_time = Date.now();
+var getSorabtnstatus_task = 0;
 var soraopen_intervaltime = 0;
 var intervalTime = 0;
 var intervalTime1 = 0;
-var soraopen_interval1 = null;
-var earthquake_telop_times = 0;
-var earthquake_telop_remaining = 1500;
+var soraopen_interval1: any = null;
 var t=0;
 var cnv_anim1 = new Variable_Animation(440, "sliding", []);
 var anim_soraview = new Variable_Animation(250, "sliding_3", [1081, 1]);
 var anim_soraview_color = new Variable_Animation(250, "Normal", [0, 255]);
 var anim_soraopen = new Variable_Animation(2100, "sliding", [0, 210]);
 var anim_fullscreen = new Variable_Animation(3000, "Normal", [5, 0]);
-var summary = false;
 var testNow = false;
 var lastSaveTime = Date.now();
+void sorabtn_last_reading;
+void sorabtn_now_reading;
+void sorabtn_reading_done_time;
+void getSorabtnstatus_task;
+void soraopen_move;
+void intervalArray;
+void soraopen_intervaltime;
+void soraopen_interval1;
+void anim_soraopen;
 
 // intensity list
-const intensity_list = {
+const _intensity_list = {
   "-1": undefined,
   "10": "1",
   "20": "2",
@@ -1164,32 +1143,36 @@ const intensity_list = {
   "60": "6強",
   "65": "7"
 };
+void _intensity_list;
 
 function savedata(){
+  const getInputValue = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? "";
+  const getInputChecked = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+  const getValueAsNumber = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.valueAsNumber ?? 0;
   const data = {
     mode0: {
       title: [
-        document.getElementById('title1').value,
-        document.getElementById('title2').value,
-        document.getElementById('title3').value,
-        document.getElementById('title4').value,
-        document.getElementById('title5').value
+        getInputValue('title1'),
+        getInputValue('title2'),
+        getInputValue('title3'),
+        getInputValue('title4'),
+        getInputValue('title5')
       ],
       main: [
-        document.getElementById('message1').value,
-        document.getElementById('message2').value,
-        document.getElementById('message3').value,
-        document.getElementById('message4').value,
-        document.getElementById('message5').value
+        getInputValue('message1'),
+        getInputValue('message2'),
+        getInputValue('message3'),
+        getInputValue('message4'),
+        getInputValue('message5')
       ]
     },
     mode3: [
-      document.getElementById('BNtitle').value,
-      document.getElementById('BNtext1').value,
-      document.getElementById('BNtext2').value
+      getInputValue('BNtitle'),
+      getInputValue('BNtext1'),
+      getInputValue('BNtext2')
     ],
     settings: {
-      tickerSpeed: document.getElementById("speedVal").valueAsNumber,
+      tickerSpeed: getValueAsNumber("speedVal"),
       // fixitem: [
       //   document.getElementsByName('scrollfix')[0].checked,
       //   document.getElementsByName('scrollfix')[1].checked,
@@ -1198,26 +1181,26 @@ function savedata(){
       //   document.getElementsByName('scrollfix')[4].checked
       // ],
       viewTsunamiType: elements.id.viewTsunamiType.value,
-      soraview: document.getElementById('isSoraview').checked,
+      soraview: getInputChecked('isSoraview'),
       details: {
         earthquake: {
-          intensity: document.getElementsByName('minint')[0].value,
-          magnitude: document.getElementsByName('minmag')[0].value,
-          depth: document.getElementsByName('depmin')[0].value
+          intensity: (document.getElementsByName('minint')[0] as HTMLInputElement | undefined)?.value ?? "",
+          magnitude: (document.getElementsByName('minmag')[0] as HTMLInputElement | undefined)?.value ?? "",
+          depth: (document.getElementsByName('depmin')[0] as HTMLInputElement | undefined)?.value ?? ""
         },
         eew: {
-          intensity: document.getElementsByName('eewminint')[0].value,
-          unknown: document.getElementsByName('eewintunknown')[0].value,
-          magnitude: document.getElementsByName('eewminmag')[0].value,
-          depth: document.getElementsByName('eewdepmin')[0].value
+          intensity: (document.getElementsByName('eewminint')[0] as HTMLInputElement | undefined)?.value ?? "",
+          unknown: (document.getElementsByName('eewintunknown')[0] as HTMLInputElement | undefined)?.value ?? "",
+          magnitude: (document.getElementsByName('eewminmag')[0] as HTMLInputElement | undefined)?.value ?? "",
+          depth: (document.getElementsByName('eewdepmin')[0] as HTMLInputElement | undefined)?.value ?? ""
         }
       },
       clipboard: {
-        eew: document.getElementById("setClipEEW").checked,
-        quake: document.getElementById("setClipQuake").checked
+        eew: getInputChecked("setClipEEW"),
+        quake: getInputChecked("setClipQuake")
       },
       interval: {
-        iedred7584EEW: document.getElementById("setIntervalIedred").valueAsNumber,
+        iedred7584EEW: getValueAsNumber("setIntervalIedred"),
         nhkQuake: elements.id.setIntervalNHKquake.valueAsNumber,
         jmaDevFeed: elements.id.setIntervalJmaWt.valueAsNumber,
         warnInfo: elements.id.setIntervalWarn.valueAsNumber,
@@ -1229,25 +1212,25 @@ function savedata(){
       },
       volume: {
         eewL: [
-          document.getElementById("volEEWl1").valueAsNumber,
-          document.getElementById("volEEWl5").valueAsNumber,
-          document.getElementById("volEEWl9").valueAsNumber
+          getValueAsNumber("volEEWl1"),
+          getValueAsNumber("volEEWl5"),
+          getValueAsNumber("volEEWl9")
         ],
-        eewH: document.getElementById("volEEWh").valueAsNumber,
-        eewC: document.getElementById("volEEWc").valueAsNumber,
-        eewP: document.getElementById("volEEWp").valueAsNumber,
-        gl: document.getElementById("volGL").valueAsNumber,
-        ntc: document.getElementById("volNtc").valueAsNumber,
-        spW: document.getElementById("volSpW").valueAsNumber,
-        tnm: document.getElementById("volTnm").valueAsNumber,
-        hvra: document.getElementById('volHvRa').valueAsNumber,
-        fldoc5: document.getElementById('volFldOc5').valueAsNumber,
-        fldoc4: document.getElementById('volFldOc4').valueAsNumber,
+        eewH: getValueAsNumber("volEEWh"),
+        eewC: getValueAsNumber("volEEWc"),
+        eewP: getValueAsNumber("volEEWp"),
+        gl: getValueAsNumber("volGL"),
+        ntc: getValueAsNumber("volNtc"),
+        spW: getValueAsNumber("volSpW"),
+        tnm: getValueAsNumber("volTnm"),
+        hvra: getValueAsNumber('volHvRa'),
+        fldoc5: getValueAsNumber('volFldOc5'),
+        fldoc4: getValueAsNumber('volFldOc4'),
         quake: []
       },
       gainPrograms: audioAPI.gainTimer,
       speech: {
-        volume: document.getElementById("speech-vol-input").valueAsNumber,
+        volume: getValueAsNumber("speech-vol-input"),
         options: {
           EEW: elements.id.speechCheckboxEEW.checked,
           Quake: elements.id.speechCheckboxQuake.checked,
@@ -1257,7 +1240,7 @@ function savedata(){
         }
       },
       theme: {
-        color: document.getElementsByName("themeColors")[0].value
+        color: (document.getElementsByName("themeColors")[0] as HTMLInputElement | undefined)?.value ?? ""
       },
       style: 0
     },
@@ -1278,13 +1261,13 @@ function savedata(){
   chrome.storage.sync.set(data, function(){/* console.log("Data recorded.", data)*/});
 }
 
-function bit(number, bitL){
+function bit(number: any, bitL: any){
   return number & (2 ** bitL) && 1;
 }
-function toRad(deg){
+function toRad(deg: any){
   return deg*(Math.PI/180);
 }
-function arrayCombining(array){
+function arrayCombining(array: any){
   if(rivertext[0] === "wfi"){
     return "情報の取得を待っています...";
   } else {
@@ -1424,11 +1407,13 @@ for (const idx in elements.class.switch_button){
     duration: 300,
     iterations: 1
   }));
-  item.data_index = idx-0;
+  item.dataset.index = idx;
   item.addEventListener("click", event => {
+    const target = event.currentTarget as HTMLElement & { dataset?: { index?: string } };
+    const index = Number(target?.dataset?.index ?? 0);
     for (const item of elements.class.tab_item) item.classList.add("opt-hide");
-    elements.class.tab_item[event.target.data_index].classList.remove("opt-hide");
-    animations.switchTabs[event.target.data_index].play();
+    elements.class.tab_item[index]?.classList.remove("opt-hide");
+    animations.switchTabs[index]?.play();
   });
 }
 
@@ -1463,11 +1448,11 @@ $('.settings-box button').eq(2).on('click', function(){
   $('#menu .dataList').toggle(200);
 });
 
-function drawRect(x, y, width, height, color){
+function drawRect(x: number, y: number, width: number, height: number, color: string){
   context.fillStyle = color;
   context.fillRect(x, y, width, height);
 }
-function ExRandom(min, max){
+function ExRandom(min: any, max: any){
   return Math.floor( Math.random() * (max + 1 - min) ) + min ;
 }
 function BNref(){
@@ -1494,40 +1479,11 @@ function keydown(event){
 }
 
 function viewWeatherWarningList(){
-  elements.id.wtWarnTableBody.innerHTML = "";
-  if (NewsOperator.standby.length){
-    elements.class.wtWarnListMsg[0].textContent = NewsOperator.standby.length + "個の表示待機中の気象情報があります";
-    for (let i=0; i<NewsOperator.standby.length; i++){
-      const div1 = document.createElement("div");
-      const div2 = document.createElement("div");
-      const div3 = document.createElement("div");
-      const div4 = document.createElement("div");
-      const td1 = document.createElement("td");
-      const td2 = document.createElement("td");
-      const td3 = document.createElement("td");
-      const td4 = document.createElement("td");
-      const tr = document.createElement("tr");
-      div1.textContent = NewsOperator.standby[i].title;
-      div2.textContent = NewsOperator.standby[i].description;
-      div3.textContent = NewsOperator.standby[i].detail;
-      div4.textContent = NewsOperator.standby[i].duration + "ms";
-      td1.className = "title";
-      td2.className = "subtitle";
-      td3.className = "maintext";
-      td4.className = "newsDuration";
-      td1.style.minWidth = "100px";
-      td2.style.minWidth = "100px";
-      td3.style.minWidth = "100px";
-      td1.appendChild(div1);
-      td2.appendChild(div2);
-      td3.appendChild(div3);
-      td4.appendChild(div4);
-      tr.append(td1, td2, td3, td4);
-      elements.id.wtWarnTableBody.appendChild(tr);
-    }
-  } else {
-    elements.class.wtWarnListMsg[0].textContent = "表示待機中の気象情報はありません";
-  }
+  renderNewsStandbyList({
+    standby: NewsOperator.standby,
+    messageEl: elements.class.wtWarnListMsg[0],
+    tableBodyEl: elements.id.wtWarnTableBody
+  });
 }
 
 const SetMode = int => {
@@ -1550,9 +1506,37 @@ const SetMode = int => {
     Routines.md3title();
   }
 };
+NewsOperator.setDeps({ getViewMode: () => viewMode, setMode: SetMode });
 const SetMscale = (int: number) => {
   mscale = int;
   if (viewMode === 0){ Routines.md0title(); }
+};
+
+const renderQuakeMode = () => {
+  const quakeResult = renderQuakeView({
+    context,
+    images,
+    colorScheme,
+    colorThemeMode,
+    mscale,
+    language: quakeRenderState.language,
+    q_depth,
+    epicenter_list,
+    q_epiIdx,
+    q_epiName,
+    q_currentShindo,
+    q_maxShindo,
+    q_magnitude,
+    isPreliminary: q_magnitude === "--",
+    q_timeAll,
+    timeCount,
+    cnv_anim1,
+    shindoListJP,
+    DrawTextureText,
+    fontSans: FontFamilies.sans,
+    mutable: quakeRenderState
+  });
+  if (quakeResult.shouldReset) SetMode(0);
 };
 
 Object.defineProperty(Number.prototype, "byteToString", {
@@ -1618,47 +1602,29 @@ const Routines = {
     time.fillText(timeString2, 10, 62, 108);
   },
   md0title: function mode0titie(){
-    context.fillStyle = colorScheme[colorThemeMode][1][mscale];
-    context.fillRect(0, 0, 1080, 60);
-    context.save();
-    context.beginPath();
-    context.rect(0, 0, 1080, 60);
-    context.clip();
-    context.fillStyle = colorScheme[colorThemeMode][1][mscale];
-    context.fillRect(0, 0, 1080, 60);
-    if (!(t_viewType === 2 && !t_Cancelled)){
-      context.font = "28px " + FontFamilies.sans;
-      switch (textCount){
-        case 5:
-          context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-          context.fillText(directTexts[5 + (viewingTextIndex+4)%textCount], 895, 50, 185);
-        case 4:
-          context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-          context.fillText(directTexts[5 + (viewingTextIndex+3)%textCount], 685, 50, 185);
-        case 3:
-          context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-          context.fillText(directTexts[5 + (viewingTextIndex+2)%textCount], 475, 50, 185);
-        case 2:
-          context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-          context.fillText(directTexts[5 + (viewingTextIndex+1)%textCount], 265, 50, 185);
-          break;
-      }
-    }
-    context.fillStyle = colorScheme[colorThemeMode][3][mscale];
-    context.font = "45px " + FontFamilies.sans;
-    if (t_viewType === 2 && !t_Cancelled){
-      context.fillText("津波情報", 450, 47, 250);
-    } else {
-      context.fillText(directTexts[5 + viewingTextIndex], 10, 47, 250);
-    }
-    context.restore();
+    renderNormalTitle({
+      context,
+      colorScheme,
+      colorThemeMode,
+      mscale,
+      fontSans: FontFamilies.sans,
+      normalItems,
+      directTexts,
+      viewingTextIndex,
+      textCount,
+      t_viewType,
+      t_Cancelled: tsunamiOverlayState.isCancelled
+    });
   },
   md3title: function breakingNewsTitle(){
-    context.fillStyle = colorScheme[colorThemeMode][1][mscale];
-    context.fillRect(0, 0, 1080, 60);
-    context.font = "42px " + FontFamilies.sans;
-    context.fillStyle = colorScheme[colorThemeMode][5][3][mscale];
-    context.fillText(NewsOperator.viewing.title, 35, 45, 1010);
+    renderNewsTitle({
+      context,
+      colorScheme,
+      colorThemeMode,
+      mscale,
+      fontSans: FontFamilies.sans,
+      title: NewsOperator.viewing.title
+    });
   },
   main: function mainRoutines(){
     //let gr; //canvas gradient color
@@ -1671,16 +1637,6 @@ const Routines = {
     //context.font = '40px "游ゴシック Medium","Yu Gothic Medium","游ゴシック体",YuGothic,sans-serif';
     //context.font = '40px "Hiragino Sans W3", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "メイリオ", Meiryo, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif';
     // let performDrawStartAt = performance.now() * 1000;
-    let TextWidth;
-    switch (viewMode) {
-      case 0:
-        TextWidth = -(strWidth(directTexts[viewingTextIndex])) - 200;
-        break;
-      default:
-        TextWidth = strWidth(quakeText[q_currentShindo]) * -1;
-        break;
-    }
-
     const targetTime = getAdjustedDate();
     const targetTimeInt = targetTime - 0;
     // 津波予報の失効時刻になったら・・・
@@ -1705,11 +1661,8 @@ const Routines = {
     if ((q_startTime % 9000) === 1) getAmedasData();
     if ((q_startTime % 3000) === 1) getEvacuationData();
     if ((q_startTime % 225) === 1){
-      t_page++;
-      if(tsunamiTexts.length <= t_page){
-        t_page = -5;
-        Routines.isDrawNormalTitle = true;
-      }
+      const didLoop = advanceTsunamiPage(tsunamiOverlayState);
+      if (didLoop) Routines.isDrawNormalTitle = true;
     }
     const isMscale2 = mscale === 1 && colorThemeMode != 2;
     //if((startTime%50) == 1)jma_earthquake();
@@ -1749,18 +1702,18 @@ const Routines = {
         break;
     }
     if (commandShortcuts.hasOwnProperty(textCmdIds[viewingTextIndex])) directTexts[viewingTextIndex] = commandShortcuts[textCmdIds[viewingTextIndex]];
-    if (t_viewType === 2 && !t_Cancelled){
+    if (t_viewType === 2 && !tsunamiOverlayState.isCancelled){
       directTexts[viewingTextIndex] = DataOperator.tsunami.text.whole;
     }
+    syncNormalItemsFromDirectTexts();
+    const textWidth = viewMode === 0
+      ? -strWidth(normalItems[viewingTextIndex]?.message ?? directTexts[viewingTextIndex] ?? "") - 200
+      : -strWidth(quakeText[q_currentShindo]);
     if ((timeCount%275) === 0){
-      if (language == "Ja"){
-        language = "En";
-      } else {
-        language = "Ja";
-      }
+      quakeRenderState.language = quakeRenderState.language === "Ja" ? "En" : "Ja";
     }
     //CB to if((timeCount%))
-    if (TextWidth > textOffsetX){
+    if (textWidth > textOffsetX){
       textOffsetX = 1200;
       q_currentShindo--;
       Routines.isDrawNormalTitle = true;
@@ -1774,13 +1727,14 @@ const Routines = {
     }
     if (q_currentShindo < 0){
       q_currentShindo = q_maxShindo;
-      if (viewMode === 2) earthquake_telop_times++;
+      if (viewMode === 2) quakeRenderState.earthquake_telop_times++;
     }
     if(viewingTextIndex >= textCount) viewingTextIndex = 0;
 
     if (viewMode === 0){
       context.fillStyle = colorScheme[colorThemeMode][5][1];
-      context.fillText(directTexts[viewingTextIndex], textOffsetX, 110);
+      const normalMessage = normalItems[viewingTextIndex]?.message ?? directTexts[viewingTextIndex];
+      context.fillText(normalMessage, textOffsetX, 110);
     } else if (viewMode === 2){
       context.fillStyle = colorScheme[colorThemeMode][5][2];
       context.fillText(quakeText[q_currentShindo], textOffsetX, 110);
@@ -1841,260 +1795,51 @@ const Routines = {
         break;
 
       case 1:
-        context.drawImage(eewMapBmp, 905, 0);
-        context.fillStyle = eewIsAlert ? "#b8240d" : "#2b4aad";
-        context.fillRect(0, 60, 900, 68);
-        context.fillStyle = eewIsAlert ? "#c42810" : "#233d91";
-        context.fillRect(0, 0, 900, 60);
-        context.drawImage(images.eew[eewIsAlert ? "pub" : "fc"].imgBmp, 0, 0, 320, 60);
-        context.fillStyle = eewIsAlert ? "#f22" : "#000";
-        context.fillRect(320, 4, 10, 54);
-        context.fillStyle = "#fff";
-        if (eewIsAssumption){
-          context.font = "500 28px " + FontFamilies.sans;
-          context.fillText("震度", 80, 115, 45);
-          context.fillText("地域", 318, 115, 45);
-          ctx.drawTextureImage.EEW_intensity(135, 60, eewCalcIntensityIndex);
-          ctx.drawTextureImage.EEW_epicenter("JP_350", 380, 60, {id: eewEpicenterID});
-        } else if (eewClassCode != 35){
-          context.font = "500 25px " + FontFamilies.sans;
-          context.fillText("最大", 8, 92, 45);
-          context.fillText("震度", 8, 121, 45);
-          context.fillText("震", 318, 90, 23);
-          context.fillText("源", 318, 119, 23);
-          ctx.drawTextureImage.EEW_intensity(50, 60, eewCalcIntensityIndex);
-          ctx.drawTextureImage.EEW_epicenter("JP_350", 348, 60, {id: eewEpicenterID});
-          context.fillText("深さ", 725, 88, 45);
-          context.font = "500 36px " + FontFamilies.sans;
-          context.fillText("M", 170, 118, 35);
-          DrawTextureText(eewDepth+"km", 750, 123, {base: "Microsoft-Sans-Serif", px: 40, weight: "bold", color: "ffffff", letterSpacing: 1}, 100);
-        } else {
-          context.font = "500 55px " + FontFamilies.sans;
-          context.fillText("5弱", 95, 115, 85);
-          context.font = "500 30px " + FontFamilies.sans;
-          context.fillText("程度", 185, 115, 60);
-          context.font = "500 35px " + FontFamilies.sans;
-          context.fillText("以上", 245, 115, 70);
-          ctx.drawTextureImage.EEW_epicenter("JP_350", 424, 60, {id: eewEpicenterID});
+        {
+          const eewResult = renderEewView({
+            context,
+            images,
+            colorScheme,
+            colorThemeMode,
+            fontSans: FontFamilies.sans,
+            drawTextureImage: ctx.drawTextureImage,
+            DrawTextureText,
+            eewMapBmp,
+            eewIsAlert,
+            eewIsAssumption,
+            eewClassCode,
+            eewCalcIntensityIndex,
+            eewEpicenterID,
+            eewDepth,
+            eewMagnitude,
+            eewWarnForecast,
+            eewWarnTextList,
+            qStartTime: q_startTime,
+            eewOriginTime,
+            testNow,
+            eewEpiPos,
+            isCancel: eewIsCancel
+          });
+          if (eewResult.shouldExit) SetMode(0);
         }
-        if((!eewIsAssumption) && eewClassCode != 35){
-          context.font = "500 58px " + FontFamilies.sans;
-          context.fillText((eewMagnitude-0).toFixed(1), 205, 115, 80);
-        }
-        context.fillStyle = "#777";
-        context.fillRect(900, 0, 5, 128);
-
-        // Notes: (unused) 津波が発生する可能性があります。
-
-        if (eewWarnForecast){
-          context.font = "500 25px " + FontFamilies.sans;
-          context.fillStyle = "yellow";
-          context.fillText("以下の地域では強い揺れに警戒。", 337, 26, 553);
-          context.fillStyle = "#fff";
-          context.fillText(eewWarnForecast, 337, 53, 553);
-        } else {
-          context.fillStyle = "#ffea00";
-          context.font = "500 25px " + FontFamilies.sans;
-          const topWarnText = eewWarnTextList[Math.floor((q_startTime / 300) % 23)];
-          context.fillText(topWarnText.ja[Math.floor(((q_startTime % 300) / 300) * topWarnText.ja.length)], 337, 26, 553);
-          context.fillText(topWarnText.en[Math.floor(((q_startTime % 300) / 300) * topWarnText.en.length)], 337, 53, 553);
-        }
-
-        if (eewOriginTime.getTime() < (new Date())-480000){
-          if(!testNow) SetMode(0);
-        }
-
-        if ((!eewIsAssumption) && eewClassCode != 35){
-          context.fillStyle = "#d00";
-          context.strokeStyle = "#fff";
-          context.lineWidth = 2;
-          context.globalAlpha = 1 - (q_startTime % 60) / 78;
-          context.beginPath();
-          context.moveTo(eewEpiPos[0]- 6, eewEpiPos[1]-10);
-          context.lineTo(eewEpiPos[0]-10, eewEpiPos[1]- 6);
-          context.lineTo(eewEpiPos[0]- 4, eewEpiPos[1]   );
-          context.lineTo(eewEpiPos[0]-10, eewEpiPos[1]+ 6);
-          context.lineTo(eewEpiPos[0]- 6, eewEpiPos[1]+10);
-          context.lineTo(eewEpiPos[0]   , eewEpiPos[1]+ 4);
-          context.lineTo(eewEpiPos[0]+ 6, eewEpiPos[1]+10);
-          context.lineTo(eewEpiPos[0]+10, eewEpiPos[1]+ 6);
-          context.lineTo(eewEpiPos[0]+ 4, eewEpiPos[1]   );
-          context.lineTo(eewEpiPos[0]+10, eewEpiPos[1]- 6);
-          context.lineTo(eewEpiPos[0]+ 6, eewEpiPos[1]-10);
-          context.lineTo(eewEpiPos[0]   , eewEpiPos[1]- 4);
-          context.closePath();
-          context.fill();
-          context.stroke();
-          context.lineWidth = 1;
-          context.globalAlpha = 1;
-        } else {
-          context.fillStyle = "#d00";
-          const t1 = (q_startTime % 60) / 68;
-          const t2 = ((q_startTime + 15) % 60) / 68;
-          const t3 = ((q_startTime + 30) % 60) / 68;
-          const t4 = ((q_startTime + 45) % 60) / 68;
-          context.globalAlpha = 0.5 - t1/2;
-          context.beginPath();
-          context.arc(eewEpiPos[0], eewEpiPos[1], t1*28.284271, 0, 2*Math.PI);
-          context.fill();
-          context.globalAlpha = 0.5 - t2/2;
-          context.beginPath();
-          context.arc(eewEpiPos[0], eewEpiPos[1], t2*28.284271, 0, 2*Math.PI);
-          context.fill();
-          context.globalAlpha = 0.5 - t3/2;
-          context.beginPath();
-          context.arc(eewEpiPos[0], eewEpiPos[1], t3*28.284271, 0, 2*Math.PI);
-          context.fill();
-          context.globalAlpha = 0.5 - t4/2;
-          context.beginPath();
-          context.arc(eewEpiPos[0], eewEpiPos[1], t4*28.284271, 0, 2*Math.PI);
-          context.fill();
-          context.globalAlpha = 1;
-        }
-
-        if(eewIsCancel) context.drawImage(images.eew.cancel.imgBmp, 0, 0);
-
-        //context.fillText(multilingualQuake[Math.floor((startTime%300)/150)][Math.floor((startTime%3000)/300+34)], 425, 50, 650);
-        //context.fillText("最大震度不明 M6.4 震源:あいうえおかきくけこ 深さ:590km (第89報)" ,10 ,115, 1060)
         break;
 
       case 2:
-        var sum = (shindoListJP[q_currentShindo] != "");
-        if (sum != summary){
-          if (sum){
-            cnv_anim1.start_n = -200;
-            cnv_anim1.end_n = 0;
-            cnv_anim1.start();
-          } else {
-            cnv_anim1.start_n = 0;
-            cnv_anim1.end_n = -200;
-            cnv_anim1.start();
-          }
-        }
-        summary = sum;
-        const dif = cnv_anim1.current();
-        context.drawImage(images.quake.title[colorThemeMode][mscale].imgBmp, 0, 0);
-        //地震情報 文字
-        // context.font = "400 30px 'ヒラギノ角ゴシック'";
-        // context.fillStyle = "#222";
-        // context.fillText("地震情報", 10, 30);
-        // context.font = "bold 21px Helvetica-Neue";
-        // context.fillText("Earthquake Information", 10, 53, 206);
-        context.fillStyle = colorScheme[colorThemeMode][0][mscale];
-        context.fillRect(dif, 60, 200, 68);
-        // 最大震度
-        if (q_maxShindo > 0) context.drawImage(images.quake.texts.maxInt[colorThemeMode == 2 ? 2 : mscale][language.toLocaleLowerCase()][q_maxShindo<5?q_maxShindo-1:q_maxShindo-2], 240, 0);
-        // 深さ（ラベル）
-        if (q_depth){
-          if (language === "Ja") context.drawImage(isMscale2 ? images.quake.texts.depth.ja2 : images.quake.texts.depth.ja, 917, 0);
-          if (language === "En") context.drawImage(isMscale2 ? images.quake.texts.depth.en2 : images.quake.texts.depth.en, 917, 3);
-        }
-        // 深さ（km）
-        if (q_depth!="ごく浅い" && q_depth!="ごく浅く" && q_depth) context.drawImage(isMscale2 ? images.quake.texts.depth_km2 : images.quake.texts.depth_km, 1042, 28);
-        // マグニチュード（ラベル）
-        // context.drawImage(isMscale2 ? images.quake.texts.magni2 : images.quake.texts.magni, 406, 0);
-        context.drawImage(isMscale2 ? images.quake.texts.magni2 : images.quake.texts.magni, 420, 25);
-        context.font = "500 50px " + FontFamilies.sans;
-        context.fillStyle = isMscale2 ? "#333" : "#fff";
-        // マグニチュード
-        DrawTextureText(q_magnitude, 462, 45, {base:"HelveticaNeue-CondensedBold",px:50,weight:"bold",letterSpacing:0});
-        // 深さ
-        if (q_depth == "ごく浅い"){
-          context.font = "500 30px Inter, " + FontFamilies.sans;
-          if (language === "Ja") context.fillText("ごく浅い", 950, 53, 90);
-          if (language === "En") context.fillText("shallow", 975, 53, 90)
-        } else {
-          DrawTextureText(q_depth, 978, 48, {base:"HelveticaNeue-CondensedBold",px:50,weight:"bold",letterSpacing:0}, 60);
-        }
-        context.font = "500 30px " + FontFamilies.sans;
-        // 震源
-        if (language === "Ja") context.fillText(q_epiIdx === -2 ? q_epiName : epicenter_list[0][q_epiIdx], 586, 53, 300);
-        if (language === "En") context.fillText(q_epiIdx === -2 ? q_epiName : epicenter_list[1][q_epiIdx], 566, 53, 350);
-        // 震度
-        context.drawImage(images.quake.texts.intensity[context.fillStyle][q_currentShindo], 10+dif, 60);
-        // 時間
-        context.font = "23px '7barSP'";
-        context.fillText(q_timeAll, 595, 23);
-        // 水色
-        context.fillStyle = (((timeCount%12)<5) && timeCount<216 && (timeCount%72)<60) ? "#e02222" : (q_magnitude == "--") ? "#f2f241" : "#2229";
-        context.fillRect(224, 1, 10, 58);
-        // 矢印(内容 タイトル)
-        context.fillStyle = colorScheme[colorThemeMode][0][mscale]+"99";
-        context.beginPath();
-        context.moveTo(200+dif, 127);
-        context.lineTo(230+dif,  94);
-        context.lineTo(200+dif,  60);
-        context.closePath();
-        context.fill();
-        context.strokeStyle = "#ffffff";
-        context.beginPath();
-        context.moveTo(200+dif, 123);
-        context.lineTo(226+dif,  94);
-        context.lineTo(200+dif,  64);
-        context.stroke();
-        context.beginPath();
-        context.moveTo(200+dif,  64);
-        context.lineTo(  4+dif,  64);
-        context.stroke();
-        context.beginPath();
-        context.moveTo(200+dif, 123);
-        context.lineTo(  4+dif, 123);
-        context.stroke();
-        //アニメーション
-        if (timeCount < 13){
-          context.fillStyle = "#fff5";
-          context.beginPath();
-          context.moveTo((-(timeCount)*95)+1240, 0);
-          context.lineTo((-(timeCount)*95)+1270, 0);
-          context.lineTo((-(timeCount)*95)+1210, 127);
-          context.lineTo((-(timeCount)*95)+1180, 127);
-          context.fill();
-        }
-        if(earthquake_telop_times > 1){
-          earthquake_telop_remaining--;
-          if(earthquake_telop_remaining === 0){
-            SetMode(0);
-            earthquake_telop_remaining = 1500;
-            earthquake_telop_times = 0;
-          }
-          context.shadowColor = colorScheme[colorThemeMode][5][4];
-          context.shadowBlur = 5;
-          context.fillStyle = colorScheme[colorThemeMode][5][4];
-          context.beginPath();
-          context.moveTo(1080, 127);
-          context.lineTo(1080, 94);
-          context.lineTo(806, 94);
-          context.lineTo(773, 127);
-          context.fill();
-          context.shadowBlur = 0;
-          context.fillStyle = "#fff";
-          context.font = "30px " + FontFamilies.sans;
-          context.fillText(Math.ceil(earthquake_telop_remaining/50)+"秒後に通常画面に復帰します", 812, 124, 265);
-        }
+        renderQuakeMode();
         break;
 
       case 3:
         {
-          const newsProgress = NewsOperator.progress;
-          if (newsProgress <= 0){
-            if (NewsOperator.next()){
-              NewsOperator.middleWidth = -1;
-              Routines.md3title();
-            } else SetMode(0);
-          }
-          if (NewsOperator.viewing){
-            context.font = (NewsOperator.viewing.description ? 31 : 40) + "px " + FontFamilies.sans;
-            context.fillStyle = colorScheme[colorThemeMode][5][2];
-            context.fillText(NewsOperator.viewing.detail, 17, NewsOperator.viewing.description ? 122 : 110, 1046);
-            context.fillStyle = colorScheme[colorThemeMode][5][2];
-            context.font = "500 23px " + FontFamilies.sans;
-            if (NewsOperator.middleWidth === -1) NewsOperator.middleWidth = strWidth(NewsOperator.viewing.description);
-            if (NewsOperator.middleWidth * 0.8 < 1044){
-              context.fillText(NewsOperator.viewing.description, 17, 88, NewsOperator.middleWidth * 0.8);
-            } else {
-              context.fillText(NewsOperator.viewing.description, newsProgress > 0.88888888 ? 17 : newsProgress < 0.22222222 ? 1063-NewsOperator.middleWidth*0.8+17 : (1063-NewsOperator.middleWidth*0.8)*(800-newsProgress*900)/601+17, 88, NewsOperator.middleWidth*0.8);
-            }
-          }
+          const newsResult = renderNewsView({
+            context,
+            colorScheme,
+            colorThemeMode,
+            fontSans: FontFamilies.sans,
+            strWidth,
+            newsOperator: NewsOperator
+          });
+          if (newsResult.started) Routines.md3title();
+          if (newsResult.ended) SetMode(0);
         }
         break;
 
@@ -2104,41 +1849,16 @@ const Routines = {
       //   if (video?.videoWidth) context.drawImage(video, (1080-video.videoWidth/video.videoHeight*128)/2, 0, video.videoWidth/video.videoHeight*128, 128);
       //   break;
     }
-    if (!t_Cancelled && viewMode !== 1 && t_viewType === 1){
-      if (t_page < 0 || viewMode === 3){
-        const colorAlpha = ((viewMode !== 2) ? "ff" : ("0"+Math.min(255,Math.abs(Math.trunc((160-timeCount%320)*2))).toString(16)).slice(-2));
-        context.fillStyle = "#b33122" + colorAlpha;
-        context.fillRect(815, 0, 265, 43);
-        context.font = "500 30px " + FontFamilies.sans;
-        context.fillStyle = "#ffffff" + colorAlpha;
-        context.textAlign = "end";
-        context.fillText("津波情報を発表中", 1065, 33);
-        context.textAlign = "start";
-      } else {
-        context.fillStyle = "#b33122";
-        context.fillRect(265, 0, 815, 60);
-        context.font = "500 30px " + FontFamilies.sans;
-        context.fillStyle = "#fff";
-        context.fillText("津波情報", 275, 33, 800);
-        context.strokeStyle = "#fff";
-        context.lineWidth = 3;
-        context.beginPath();
-        context.moveTo(385, 55);
-        context.lineTo(435, 5);
-        context.stroke();
-        context.fillText(tsunamiTexts[t_page], 420, 53, 610);
-        context.font = "bold 20px 'Helvetica-Bold', 'HelveticaNeue', " + FontFamilies.sans;
-        context.textAlign = "center";
-        context.lineWidth = 2;
-        context.beginPath();
-        context.moveTo(1045, 25);
-        context.lineTo(1075, 25);
-        context.stroke();
-        context.fillText((t_page+1)+"", 1060, 21);
-        context.fillText(tsunamiTexts.length, 1060, 43);
-        context.textAlign = "start";
-      }
-    }
+    renderTsunamiOverlay({
+      context,
+      colorScheme,
+      colorThemeMode,
+      fontSans: FontFamilies.sans,
+      viewMode,
+      viewType: t_viewType,
+      state: tsunamiOverlayState,
+      timeCount
+    });
 
     context.lineWidth = 1;
     if (!isClose && viewMode==0 && isSoraview){
@@ -2399,14 +2119,14 @@ function eewChecking_c1(){
       eewEpicenterID = AreaEpicenter2Code[eewEpicenter] ?? "";
       eewIsCancel = data.is_cancel;
       eewIsFinal = data.is_final;
-      eewIsTraning = data.is_traning;
+      _eewIsTraning = data.is_traning;
       eewCalcIntensityIndex = ["不明", "1", "2", "3", "4", "5弱", "5強", "6弱", "6強", "7"].indexOf(data.calcintensity);
       eewCalcintensity = data.calcintensity;
       eewMagnitude = data.magunitude - 0;
       eewDepth = data.depth.slice(0, -2);
       if (eewReportID !== data.report_id) eewIsAlert = false;
       eewReportID = data.report_id;
-      eewAlertFlgText = data.alertflg;
+      _eewAlertFlgText = data.alertflg;
       let eewIsAlert_changed = (!eewIsAlert) && (data.alertflg === "警報");
       eewIsAlert = data.alertflg === "警報" ? true : false;
       eewOriginTime = new Date(data.origin_time.slice(0,4)+"/"+data.origin_time.slice(4,6)+"/"+data.origin_time.slice(6,8)+" "+data.origin_time.slice(8,10)+":"+data.origin_time.slice(10,12)+":"+data.origin_time.slice(12,14));
@@ -2616,41 +2336,52 @@ async function sorabtn(){
 }
 sorabtn.tracker = new TrafficTracker("ソラボタン");
 
-function sorabtn_view(){
+async function sorabtn_view(){
   soraopen_moving = 1080;
   soraopen_intervaltime = 0;
   intervalTime = 0;
   intervalTime1 = 0;
-  $.ajax({
-    type: 'GET',
-    url: RequestURL.wni_sorabtn,
-    dataType: 'json',
-    timeOut: 4500,
-    cache: false,
-    success: function(data){
-      sorabtn.tracker.update();
 
-      soraopen = 1;
-      anim_soraview.start();
-      anim_soraview_color.start();
-      qid = data['data']['qid'];
-      question = data['data'][0]['question'];
-      choice1 = data['data'][0]['choice1'];
-      choice2 = data['data'][0]['choice2'];
-      choice3 = data['data'][0]['choice3'];
-      choice4 = data['data'][0]['choice4'];
-      closeTime = data['data'][0]['closeTime'];
-      ans1 = data['data'][0]['ans1'] - 0;
-      ans2 = data['data'][0]['ans2'] - 0;
-      ans3 = data['data'][0]['ans3'] - 0;
-      ans4 = data['data'][0]['ans4'] - 0;
-      closeTime != "" ? isClose=true : isClose=false;
-      maxans = [ans1,ans2,ans3,ans4].sort(function(a, b) { return b - a; })[0];
-    },
-    error: function(XMLHttpRequest, textStatus, errorThrown){
-      console.log("Loading Error (sorabtn-view)\nXMLHttpRequest: " + XMLHttpRequest.status + "\ntextStatus: " + textStatus + "\nerrorThrown: " + errorThrown.message);
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 4500);
+
+  try {
+    const response = await fetch(RequestURL.wni_sorabtn, {
+      method: 'GET',
+      signal: controller.signal,
+      cache: 'no-cache',
+    });
+
+    if (!response.ok) {
+      throw new Error("HTTP status " + response.status);
     }
-  });
+
+    const data = await response.json();
+
+    sorabtn.tracker.update();
+
+    soraopen = 1;
+    anim_soraview.start();
+    anim_soraview_color.start();
+    qid = data['data']['qid'];
+    question = data['data'][0]['question'];
+    choice1 = data['data'][0]['choice1'];
+    choice2 = data['data'][0]['choice2'];
+    choice3 = data['data'][0]['choice3'];
+    choice4 = data['data'][0]['choice4'];
+    closeTime = data['data'][0]['closeTime'];
+    ans1 = data['data'][0]['ans1'] - 0;
+    ans2 = data['data'][0]['ans2'] - 0;
+    ans3 = data['data'][0]['ans3'] - 0;
+    ans4 = data['data'][0]['ans4'] - 0;
+    closeTime != "" ? isClose=true : isClose=false;
+    maxans = [ans1,ans2,ans3,ans4].sort(function(a, b) { return b - a; })[0];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log("Loading Error (sorabtn-view)\n" + message);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 function sorabtn_open(){
   soraopen_intervaltime = 0;
@@ -3643,12 +3374,12 @@ function toFull(str){
 
 function viewQuake(){
   timeCount = 1;
-  earthquake_telop_times = q_magnitude!="--" ? 0 : -1027;
-  earthquake_telop_remaining = 1500;
+  const isPreliminary = q_magnitude === "--";
+  prepareQuakeState(quakeRenderState, isPreliminary);
   // 20231105 削除 カスタム地震情報
   const magnitude_r_jp = {"-901": "不明", "-902": "8を超える巨大地震"};
   const magnitude_r_en = {"-901": "unknown", "-902": "above 8"};
-  if (q_magnitude !== "--"){
+  if (!isPreliminary){
     quakeText[0] = q_timeDD+"日"+q_timeH+"時"+q_timeM+"分頃、最大震度"+shindoListJP[q_maxShindo]+"を観測する地震が発生しました。震源は"+q_epiName+"、地震の規模を示すマグニチュードは"+(magnitude_r_jp[q_magnitude] || q_magnitude);
     if (q_depth == "ごく浅い") quakeText[0] += "、震源は"+q_depth+"です。"; else quakeText[0] += "、震源の深さは"+q_depth+"kmです。";
     quakeText[0] += quake_customComment;
@@ -3657,7 +3388,7 @@ function viewQuake(){
     quakeText[0] += "震源が沖の場合、津波が発生する恐れがあります。海岸から離れるようにしてください。";
   }
   const ampm = (q_timeH-0) > 11 ? "PM" : "AM";
-  if (q_magnitude !== "--"){
+  if (!isPreliminary){
     quakeText[0] += "　　　　　　　" + ampm + " " + (q_timeH % 12) + ":" + q_timeM + " JST - A "+(magnitude_r_en[q_magnitude] || q_magnitude)+" magnitude earthquake with a maximum intensity of "+shindoListNHK[q_maxShindo]+" occurred. The epicenter was located in " + epicenter_list[1][q_epiIdx] + ", with a depth of ";
     if(q_depth === "ごく浅い") quakeText[0] += "very shallow."; else quakeText[0] += q_depth+"km.";
   } else {
@@ -3667,10 +3398,10 @@ function viewQuake(){
     }
   }
   SetMode(2);
-  language = "Ja";
+  quakeRenderState.language = "Ja";
   textOffsetX = 1200;
   let titletext = "", windtext = "";
-  if (q_magnitude != "--") titletext = "[地震情報](" + q_timeH + ":" + q_timeM + "頃発生) 震源地:" + q_epiName + " 最大震度:" + shindoListJP[q_maxShindo] + " M" + (magnitude_r_jp[q_magnitude] || q_magnitude) + " 深さ:" + ((q_depth == "ごく浅い")?q_depth:"約"+q_depth+"km"); else titletext = "＜震度速報＞　" + q_timeH + "時" + q_timeM + "分頃発生　最大震度" + shindoListJP[q_maxShindo];
+  if (!isPreliminary) titletext = "[地震情報](" + q_timeH + ":" + q_timeM + "頃発生) 震源地:" + q_epiName + " 最大震度:" + shindoListJP[q_maxShindo] + " M" + (magnitude_r_jp[q_magnitude] || q_magnitude) + " 深さ:" + ((q_depth == "ごく浅い")?q_depth:"約"+q_depth+"km"); else titletext = "＜震度速報＞　" + q_timeH + "時" + q_timeM + "分頃発生　最大震度" + shindoListJP[q_maxShindo];
   document.getElementById("eiTitle").innerText = titletext;
   document.getElementById("eiTitle").scrollLeft = 365;
   document.getElementById("eiwind").innerText = "";
@@ -3856,14 +3587,15 @@ var p2p_elapsedTime = 2405;
 var datakey="",datacount=0;
 function humanReadable(){}
 
-var tsunamiTexts = [];
-var tsunamiLastReport = "";
 DataOperator.tsunami.onUpdate = (data, vtse41, vtse51) => {
   if (DataOperator.tsunami.isIssued){
-    tsunamiTexts = data.text.head;
-    elements.id.tsunamiList.style.color = "#ffff33";
-    elements.id.tsunamiList.innerText = DataOperator.tsunami.text.whole;
-    t_Cancelled = false;
+    setTsunamiIssued(tsunamiOverlayState, data.text.head);
+    updateTsunamiList({
+      element: elements.id.tsunamiList,
+      isIssued: true,
+      issuedText: DataOperator.tsunami.text.whole,
+      defaultText: "津波の情報はまだ入っていません。\nThere is no information available."
+    });
     if (vtse41){
       SFXController.play(sounds.tsunami[["", "watch", "notice", "warning", "majorwarning"][DataOperator.tsunami.warnLevel]]);
       const warnLevelStr = ["", "津波予報", "津波注意報", "津波警報", "大津波警報"][DataOperator.tsunami.warnLevel];
@@ -3880,10 +3612,13 @@ DataOperator.tsunami.onUpdate = (data, vtse41, vtse51) => {
       }
     }
   } else {
-    tsunamiTexts = [];
-    elements.id.tsunamiList.style.color = "#ffffff";
-    elements.id.tsunamiList.innerText = "津波の情報はまだ入っていません。\nThere is no information available.";
-    t_Cancelled = true;
+    setTsunamiCancelled(tsunamiOverlayState);
+    updateTsunamiList({
+      element: elements.id.tsunamiList,
+      isIssued: false,
+      issuedText: "",
+      defaultText: "津波の情報はまだ入っていません。\nThere is no information available."
+    });
     Routines.md0title();
   }
 };
@@ -4152,14 +3887,11 @@ function modeChange(num){
   console.log(num);
   switch (num) {
     case 0:
-      TextWidth = -(strWidth(directTexts));
       SetMode(0);
       break;
 
     case 2:
-      TextWidth = strWidth(quakeText[q_currentShindo]) * -1;
       SetMode(2);
-      mi = 0;
       break;
 
     default:
@@ -4167,6 +3899,8 @@ function modeChange(num){
       break;
   }
   textOffsetX = 1200;
+  viewingTextIndex = 0;
+  Routines.isDrawNormalTitle = true;
 }
 
 function zen2han(str) {
@@ -4458,7 +4192,6 @@ document.getElementsByName("goMessage")[0].addEventListener('click', function(){
   NewsOperator.clearAll();
   SetMode(0);
   textOffsetX = 1200;
-  language = "Ja";
   timeCount = 217;
 });
 document.getElementById("into-fullscreen").addEventListener('click', function(){
@@ -4476,15 +4209,15 @@ document.getElementById("into-fullscreen").addEventListener('click', function(){
 
 document.getElementsByName("skipMessage")[0].addEventListener('click', function(){textOffsetX = -9007199254740000;});
 document.getElementsByName("tmpSH-btn")[0].addEventListener('click', function(){$('.template-box').toggle();});
-document.getElementsByName("tmpl-button")[0].addEventListener('click', function(){quakeTemplateView(1); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[1].addEventListener('click', function(){quakeTemplateView(2); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[2].addEventListener('click', function(){quakeTemplateView(3); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[3].addEventListener('click', function(){quakeTemplateView(4); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[4].addEventListener('click', function(){quakeTemplateView(5); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[5].addEventListener('click', function(){quakeTemplateView(6); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[6].addEventListener('click', function(){quakeTemplateView(7); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[7].addEventListener('click', function(){quakeTemplateView(8); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
-document.getElementsByName("tmpl-button")[8].addEventListener('click', function(){quakeTemplateView(9); SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[0].addEventListener('click', function(){quakeTemplateView(1); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[1].addEventListener('click', function(){quakeTemplateView(2); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[2].addEventListener('click', function(){quakeTemplateView(3); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[3].addEventListener('click', function(){quakeTemplateView(4); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[4].addEventListener('click', function(){quakeTemplateView(5); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[5].addEventListener('click', function(){quakeTemplateView(6); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[6].addEventListener('click', function(){quakeTemplateView(7); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[7].addEventListener('click', function(){quakeTemplateView(8); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
+document.getElementsByName("tmpl-button")[8].addEventListener('click', function(){quakeTemplateView(9); SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 document.getElementById("speedVal").addEventListener('input', function (){
   changeTextSpeed();
 });
@@ -4519,7 +4252,7 @@ document.getElementById("stopEEWtest").addEventListener('click', function(){
 });
 
 // background_send("ZoomInformation["+Math.round(window.outerWidth/window.innerWidth*100)/100+"]");
-document.getElementById("ChangeToEq").addEventListener('click', function (){SetMode(2); textOffsetX = 1200; language = "Ja"; timeCount = 217;});
+document.getElementById("ChangeToEq").addEventListener('click', function (){SetMode(2); textOffsetX = 1200; quakeRenderState.language = "Ja"; timeCount = 217;});
 
 document.getElementById("speech-vol-input").addEventListener("input", function (event){
   speechBase.volume = event.target.valueAsNumber;

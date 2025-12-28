@@ -2,7 +2,25 @@ export type QuakeMutable = {
   summary: boolean;
   earthquake_telop_times: number;
   earthquake_telop_remaining: number;
+  language: "Ja" | "En";
 };
+
+export const quakeRenderState: QuakeMutable = {
+  summary: false,
+  earthquake_telop_times: 0,
+  earthquake_telop_remaining: 1500,
+  language: "Ja"
+};
+
+export function resetQuakeTelop(mutable: QuakeMutable, isPreliminary: boolean){
+  mutable.earthquake_telop_times = isPreliminary ? -1027 : 0;
+  mutable.earthquake_telop_remaining = 1500;
+}
+
+export function prepareQuakeState(mutable: QuakeMutable, isPreliminary = false){
+  resetQuakeTelop(mutable, isPreliminary);
+  mutable.language = "Ja";
+}
 
 export type QuakeRenderDeps = {
   context: CanvasRenderingContext2D;
@@ -10,7 +28,7 @@ export type QuakeRenderDeps = {
   colorScheme: any;
   colorThemeMode: number;
   mscale: number;
-  language: string;
+  language: "Ja" | "En";
   q_depth: string;
   epicenter_list: string[][];
   q_epiIdx: number;
@@ -18,6 +36,7 @@ export type QuakeRenderDeps = {
   q_currentShindo: number;
   q_maxShindo: number;
   q_magnitude: string;
+  isPreliminary: boolean;
   q_timeAll: string;
   timeCount: number;
   cnv_anim1: any;
@@ -44,6 +63,7 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
     q_currentShindo,
     q_maxShindo,
     q_magnitude,
+    isPreliminary,
     q_timeAll,
     timeCount,
     cnv_anim1,
@@ -94,7 +114,7 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
   context.drawImage(images.quake.texts.intensity[context.fillStyle][q_currentShindo], 10+dif, 60);
   context.font = "23px '7barSP'";
   context.fillText(q_timeAll, 595, 23);
-  context.fillStyle = (((timeCount%12)<5) && timeCount<216 && (timeCount%72)<60) ? "#e02222" : (q_magnitude == "--") ? "#f2f241" : "#2229";
+  context.fillStyle = (((timeCount%12)<5) && timeCount<216 && (timeCount%72)<60) ? "#e02222" : isPreliminary ? "#f2f241" : "#2229";
   context.fillRect(224, 1, 10, 58);
   context.fillStyle = colorScheme[colorThemeMode][0][mscale]+"99";
   context.beginPath();

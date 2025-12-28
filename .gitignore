@@ -25,6 +25,7 @@ dist-ssr
 
 # 参考資料
 dmdata.jp-main/
+db/
 
 # バックアップ
 *.bak
