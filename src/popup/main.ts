@@ -145,10 +145,75 @@ chrome.runtime.getPlatformInfo().then(info => {
 // バージョン表示
 document.getElementById("dbTickerVersion")!.textContent = "Ticker Version: "+AppVersionCode+" ("+AppVersionView+")";
 
-const elements: any = {
-  id: new Proxy({}, { get: (_target, prop: string) => document.getElementById(prop) as any }),
-  class: new Proxy({}, { get: (_target, prop: string) => document.getElementsByClassName(prop) }),
-  name: new Proxy({}, { get: (_target, prop: string) => document.getElementsByName(prop) })
+const elements = {
+  id: {
+    setIntervalNHKquake: document.getElementById("setIntervalNHKquake") as HTMLInputElement,
+    setIntervalWNImscale: document.getElementById("setIntervalWNImscale") as HTMLInputElement,
+    setIntervalWNIsorabtn: document.getElementById("setIntervalWNIsorabtn") as HTMLInputElement,
+    setIntervalWNIriver: document.getElementById("setIntervalWNIriver") as HTMLInputElement,
+    setIntervalJMAfcst: document.getElementById("setIntervalJMAfcst") as HTMLInputElement,
+    setIntervalJmaWt: document.getElementById("setIntervalJmaWt") as HTMLInputElement,
+    setIntervalWNItm: document.getElementById("setIntervalWNItm") as HTMLInputElement,
+    setIntervalTpcBlackOut: document.getElementById("setIntervalTpcBlackOut") as HTMLInputElement,
+    setIntervalIedred: document.getElementById("setIntervalIedred") as HTMLInputElement,
+    setIntervalTenkiJpTsu: document.getElementById("setIntervalTenkiJpTsu") as HTMLInputElement,
+    setIntervalWarn: document.getElementById("setIntervalWarn") as HTMLInputElement,
+    setIntervalTyphCom: document.getElementById("setIntervalTyphCom") as HTMLInputElement,
+    viewTsunamiType: document.getElementById("viewTsunamiType") as HTMLInputElement,
+    dbPfDrawing: document.getElementById("dbPfDrawing") as HTMLParagraphElement,
+    tfMonitorBase: document.getElementById("tfMonitorBase") as HTMLDivElement,
+    masterGainRange: document.getElementById("master-gain-range") as HTMLInputElement,
+    masterGainOutput: document.getElementById("master-gain-output") as HTMLSpanElement,
+    gainTimer: document.getElementById("settings-gain-timer") as HTMLUListElement,
+    gainTimers: [] as DOMGainTimerItem[],
+    scheduleAdd: document.getElementById("schedule-add") as unknown as HTMLImageElement,
+    volEEWl1: document.getElementById('volEEWl1') as HTMLInputElement,
+    volEEWl5: document.getElementById('volEEWl5') as HTMLInputElement,
+    volEEWl9: document.getElementById('volEEWl9') as HTMLInputElement,
+    volEEWh: document.getElementById('volEEWh') as HTMLInputElement,
+    volEEWc: document.getElementById('volEEWc') as HTMLInputElement,
+    volEEWp: document.getElementById('volEEWp') as HTMLInputElement,
+    volGL: document.getElementById('volGL') as HTMLInputElement,
+    volNtc: document.getElementById('volNtc') as HTMLInputElement,
+    volSpW: document.getElementById('volSpW') as HTMLInputElement,
+    volTnm: document.getElementById('volTnm') as HTMLInputElement,
+    volHvRa: document.getElementById('volHvRa') as HTMLInputElement,
+    volFldOc4: document.getElementById('volFldOc4') as HTMLInputElement,
+    volFldOc5: document.getElementById('volFldOc5') as HTMLInputElement,
+    setClipEEW: document.getElementById('setClipEEW') as HTMLInputElement,
+    wtWarnTableBody: document.getElementById('wtWarnTableBody') as HTMLTableSectionElement,
+    setParticallyReadingAme: document.getElementById("setParticallyReadingAme") as HTMLInputElement,
+    dbMemoryAvCap: document.getElementById('dbMemoryAvCap') as HTMLDivElement,
+    dbMemoryWhCap: document.getElementById('dbMemoryWhCap') as HTMLDivElement,
+    dbCpuUsages: document.getElementById('dbCpuUsages') as HTMLParagraphElement,
+    dbTickerVersion: document.getElementById("dbTickerVersion") as HTMLDivElement,
+    tsunamiList: document.getElementById("tsunamiList") as HTMLDivElement,
+    dataSaverBox: document.getElementById("dataSaverBox") as HTMLDivElement,
+    eewTime: document.getElementById("eewTime") as HTMLSpanElement,
+    speechStatusCurrent: document.getElementById("speech-status-current") as HTMLDivElement,
+    speechVolInput: document.getElementById("speech-vol-input") as HTMLInputElement,
+    speechVolView: document.getElementById("speech-vol-view") as HTMLSpanElement,
+    speechCheckboxEEW: document.getElementById("speech-checkbox-eew") as HTMLInputElement,
+    speechCheckboxQuake: document.getElementById("speech-checkbox-quake") as HTMLInputElement,
+    speechCheckboxVPOA50: document.getElementById("speech-checkbox-vpoa50") as HTMLInputElement,
+    speechCheckboxGround: document.getElementById("speech-checkbox-ground") as HTMLInputElement,
+    speechCheckboxSPwarn: document.getElementById("speech-checkbox-specialwarn") as HTMLInputElement,
+  },
+  class: {
+    tab_item: Array.from(document.getElementsByClassName("tab-item")) as HTMLDivElement[],
+    switch_button: Array.from(document.getElementsByClassName("switch-button")) as HTMLButtonElement[],
+    wtWarnListMsg: Array.from(document.getElementsByClassName("wtWarnListMsg")) as HTMLDivElement[],
+    sound_quake_volume: Array.from(document.getElementsByClassName("sound_quake_volume")) as HTMLInputElement[],
+    sound_quake_type: Array.from(document.getElementsByClassName("sound_quake_type")) as HTMLTableCellElement[],
+  },
+  name: {
+    unitTemp: [
+      document.getElementsByName('unitTemp')[0] as HTMLSelectElement
+    ],
+    unitWinds: [
+      document.getElementsByName('unitWinds')[0] as HTMLSelectElement
+    ]
+  },
 };
 
 const Assets = {
@@ -156,20 +221,30 @@ const Assets = {
     start: { _src: "../public/sound/main-started.mp3" },
     quake: {
       normal: { _src: "../public/sound/quake-notice.mp3" },
-      major: { _src: "../public/sound/quake-major.mp3" }
+      major: { _src: "../public/sound/quake-major.mp3" },
+    },
+    warning: {
+      Notice: { _src: "../public/sound/warn-tornado.mp3" },
+      GroundLoosening: { _src: "../public/sound/warn-ground.mp3" },
+      Emergency: { _src: "../public/sound/warn-emergency.mp3" },
+      HeavyRain: { _src: "../public/sound/warn-heavyrain.mp3" },
+      Flood5: { _src: "../public/sound/warn-flood5.mp3" },
+      Flood4: { _src: "../public/sound/warn-flood4.mp3" },
     },
     tsunami: {
+      notice: { _src: "../public/sound/tsunami-0.mp3" },
+      watch: { _src: "../public/sound/tsunami-1.mp3" },
+      warning: { _src: "../public/sound/tsunami-2.mp3" },
       majorwarning: { _src: "../public/sound/tsunami-3.mp3" },
-      obs: { _src: "../public/sound/tsunami-obs.mp3" }
+      obs: { _src: "../public/sound/tsunami-obs.mp3" },
     },
     eew: {
       plum: { _src: "../public/sound/eew-plum.mp3" },
       first: { _src: "../public/sound/eew-first.mp3" },
       continue: { _src: "../public/sound/eew-continue.mp3" },
       last: { _src: "../public/sound/eew-last.mp3" },
-      custom: { _src: "../public/sound/eew-custom.mp3" }
-    },
-    warning: {}
+      custom: { _src: "../public/sound/eew-custom.mp3" },
+    }
   }
 };
 const sounds = Assets.sound;
