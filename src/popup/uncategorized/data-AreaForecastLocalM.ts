@@ -1,4 +1,4 @@
-const AreaForecastLocalM = {
+export const AreaForecastLocalM = {
   warn: {
     '011000': '北海道宗谷地方',
     '012010': '北海道上川地方',
@@ -462,3 +462,6 @@ const AreaForecastLocalM = {
     "47": "沖縄県",
   }
 };
+
+// Preserve global for legacy scripts still expecting AreaForecastLocalM on window.
+(globalThis as any).AreaForecastLocalM = AreaForecastLocalM;

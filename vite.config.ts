@@ -1,5 +1,6 @@
 import { crx, defineManifest } from "@crxjs/vite-plugin";
 import { defineConfig } from "vite";
+import topLevelAwait from "vite-plugin-top-level-await";
 
 const manifest = defineManifest({
   manifest_version: 3,
@@ -68,7 +69,6 @@ const manifest = defineManifest({
 });
 
 export default defineConfig({
-  plugins: [crx({ manifest })],
   publicDir: "src/public",
   build: {
     sourcemap: true,
@@ -86,5 +86,9 @@ export default defineConfig({
       //   assetFileNames: `src/[name]-[hash].[ext]`
       // }
     }
-  }
+  },
+  plugins: [
+    crx({ manifest }),
+    topLevelAwait(),
+  ]
 });

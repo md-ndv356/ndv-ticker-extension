@@ -1,4 +1,4 @@
-const multilingual = [
+export const multilingual = [
 	[
 		"地震情報",
 		"緊急地震速報",

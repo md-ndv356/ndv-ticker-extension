@@ -1,4 +1,4 @@
-var multilingual_pls = [
+export const multilingual_pls = [
 	[
 		"大津波警報",
 		"津波警報",

@@ -1,4 +1,4 @@
-var sa_list = [
+export const sa_list = [
 	[
 		"石狩地方北部",
 		"石狩地方中部",

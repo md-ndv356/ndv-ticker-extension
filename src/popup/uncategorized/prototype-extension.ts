@@ -17,7 +17,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  * @return {Number} 対象の行数です。
  */
 Object.defineProperty(String.prototype, "lineCount", {
-  value: function(){
+  value: function(this: string): number{
     let str = this;
     if(str){
       return str.split("\n").length;
@@ -36,7 +36,9 @@ Object.defineProperty(String.prototype, "lineCount", {
  * @return {Undefined}
  */
 Object.defineProperty(CanvasRenderingContext2D.prototype, "circle", {
-  value: function(x, y, r){this.arc(x, y, r, 0, 6.283185307179586, false);}
+  value: function(this: CanvasRenderingContext2D, x: number, y: number, r: number){
+    this.arc(x, y, r, 0, 6.283185307179586, false);
+  }
 });
 
 /**
@@ -51,24 +53,29 @@ Object.defineProperty(CanvasRenderingContext2D.prototype, "circle", {
  * @return {Undefined}
  */
 Object.defineProperty(CanvasRenderingContext2D.prototype, "markDots", {
-  value: function(xys){for(let i=0; xys.length>i; i++){let xy = xys[i];this.fillRect(xy[0],xy[1],1,1);}}
+  value: function(this: CanvasRenderingContext2D, xys: Array<[number, number]>){
+    for(let i=0; xys.length>i; i++){
+      let xy = xys[i];
+      this.fillRect(xy[0],xy[1],1,1);
+    }
+  }
 });
 
 Object.defineProperty(HTMLCollection.prototype, "forEach", {
-  value: function(f){
+  value: function(this: HTMLCollectionOf<Element>, f: (value: Element, index: number, array: Element[]) => void){
     let array = Array.from(this);
     return array.forEach(f);
   }
 });
 Object.defineProperty(HTMLAllCollection.prototype, "forEach", {
-  value: function(f){
+  value: function(this: HTMLAllCollection, f: (value: Element, index: number, array: Element[]) => void){
     let array = Array.from(this);
     return array.forEach(f);
   }
 });
 
 Object.defineProperty(Element.prototype, "removeChildren", {
-  value: function (){
+  value: function (this: Element){
     const elm = this;
     while (elm.firstChild) elm.removeChild(elm.firstChild);
   }
@@ -80,18 +87,60 @@ Object.defineProperty(Element.prototype, "removeChildren", {
  * @returns
  */
 Object.defineProperty(HTMLScriptElement.prototype, "loadScriptAsync", {
-  value: function (url){
+  value: function (this: HTMLScriptElement, url: string | URL){
     return new Promise((resolve, reject) => {
       const script = this;
       script.onerror = reject;
       script.onload = resolve;
       document.body.appendChild(script);
-      script.src = url;
+      script.src = typeof url === "string" ? url : url.toString();
     });
   }
 });
 
-Math.units = {
+type UnitFn = (i: number) => number;
+type UnitConversionMap = {
+  /*----  長さ  ----*/
+  km_m: UnitFn;
+  m_cm: UnitFn;
+  cm_mm: UnitFn;
+  km_cm: UnitFn;
+  m_mm: UnitFn;
+  km_mm: UnitFn;
+  m_km: UnitFn;
+  cm_m: UnitFn;
+  mm_cm: UnitFn;
+  cm_km: UnitFn;
+  mm_m: UnitFn;
+  mm_km: UnitFn;
+  m_mile: UnitFn;
+  mile_m: UnitFn;
+  m_yard: UnitFn;
+  yard_m: UnitFn;
+  seamile_m: UnitFn;
+  m_seamile: UnitFn;
+  inch_cm: UnitFn;
+  cm_inch: UnitFn;
+  feet_inch: UnitFn;
+  inch_feet: UnitFn;
+  feet_yard: UnitFn;
+  yard_feet: UnitFn;
+  feet_cm: UnitFn;
+  cm_feet: UnitFn;
+  /*----  質量  ----*/
+  t_kg: UnitFn;
+  kg_g: UnitFn;
+  g_mg: UnitFn;
+  mg_mcg: UnitFn;
+  t_g: UnitFn;
+  kg_mg: UnitFn;
+  g_mcg: UnitFn;
+  t_mg: UnitFn;
+  kg_mcg: UnitFn;
+  t_mcg: UnitFn;
+};
+
+const unitConversions: UnitConversionMap = {
   /*----  長さ  ----*/
   km_m: i => i*1000,
   m_cm: i => i*100,
@@ -132,9 +181,11 @@ Math.units = {
   t_mcg: i => i*1e12
 };
 
+Math.units = unitConversions;
+
 // https://qiita.com/777_happ/items/b2c3b59d79fa4062e3cb を改変
 Object.defineProperty(Date.prototype, "strftime", {
-  value: function (format){
+  value: function (this: Date, format: string){
     const input = {
       year: this.getFullYear(),
       month: this.getMonth() + 1,
@@ -147,7 +198,7 @@ Object.defineProperty(Date.prototype, "strftime", {
       timezone: this.getTimezoneOffset() / -60
     }
 
-    const locations = {
+    const locations: Record<string, string[]> = {
       "0": ["Africa/Casablanca", "Atlantic/Reykjavik", "Europe/London", "Etc/GMT"],
       "1": ["Europe/Berlin", "Europe/Paris", "Africa/Lagos", "Europe/Budapest", "Europe/Warsaw", "Africa/Windhoek"],
       "2": ["Europe/Istanbul", "Europe/Kiev", "Africa/Cairo", "Asia/Damascus", "Asia/Amman", "Africa/Johannesburg", "Asia/Jerusalem", "Asia/Beirut"],
@@ -183,7 +234,7 @@ Object.defineProperty(Date.prototype, "strftime", {
       "6.5": ["Asia/Yangon"],
       "9.5": ["Australia/Darwin", "Australia/Adelaide"]
     };
-    const output = {
+    const output: Record<string, string> = {
       d: ("0" + input.date).slice(-2),
       e: (" " + input.date).slice(-2),
       m: ("0" + input.month).slice(-2),
@@ -200,10 +251,13 @@ Object.defineProperty(Date.prototype, "strftime", {
       B: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][input.month - 1],
       b: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][input.month - 1],
       w: input.day + "",
-      j: ("00" + Math.floor((this - new Date(input.year, 0, 1)) / 86400000 + 1)).slice(-3),
+      j: ("00" + Math.floor((this.getTime() - new Date(input.year, 0, 1).getTime()) / 86400000 + 1)).slice(-3),
       z: (input.timezone < 0 ? "-" : "+") + ("0" + Math.floor(input.timezone * (input.timezone < 0 ? -1 : 1))).slice(-2) + ("0" + (input.timezone % 1 * 60)).slice(-2),
-      Z: locations[input.timezone + ""].join(", "),
-      "%": "%"
+      Z: (locations[input.timezone.toString()] ?? []).join(", "),
+      "%": "%",
+      c: "",
+      x: "",
+      X: ""
     };
     output.c = output.a + " " + output.b + " " + output.d + " " + output.H + ":" + output.M + ":" + output.S + " " + output.Y;
     output.x = output.Y + "/" + output.m + "/" + output.d;
@@ -212,5 +266,35 @@ Object.defineProperty(Date.prototype, "strftime", {
     return format.replace(/%([a-zA-Z%])/g, (a, b) => (output[b] || a));
   }
 });
+
+declare global {
+  interface String {
+    lineCount(): number;
+  }
+  interface CanvasRenderingContext2D {
+    circle(x: number, y: number, r: number): void;
+    markDots(xys: Array<[number, number]>): void;
+  }
+  interface HTMLCollection {
+    forEach(callback: (value: Element, index: number, array: Element[]) => void): void;
+  }
+  interface HTMLAllCollection {
+    forEach(callback: (value: Element, index: number, array: Element[]) => void): void;
+  }
+  interface Element {
+    removeChildren(): void;
+  }
+  interface HTMLScriptElement {
+    loadScriptAsync(url: string | URL): Promise<Event>;
+  }
+  interface Date {
+    strftime(format: string): string;
+  }
+  interface Math {
+    units: UnitConversionMap;
+  }
+}
+
+export {};
 
 

@@ -1,10 +1,21 @@
-var Japan_geojson = {};
-fetch("../data/20190125_AreaForecastLocalEEW_GIS_20.geojson").then(response=>response.json()).then(async geojson=>{
-  Japan_geojson = geojson;
-  await window.connect2sandbox("geojson_send", geojson);
-});
+export type ConnectToSandbox = (name: string, payload: any) => Promise<number>;
 
-const OfficeID2PrefName = {
+export let JapanGeoJSON: any = {};
+
+export async function loadJapanGeojson(connectToSandbox?: ConnectToSandbox){
+  const url = new URL('/src/assets/data/20190125_AreaForecastLocalEEW_GIS_20.geojson', import.meta.url).href;
+  try {
+    const geojson = await fetch(url).then(response => response.json());
+    JapanGeoJSON = geojson;
+    if (connectToSandbox) await connectToSandbox('geojson_send', geojson);
+    return geojson;
+  } catch (error) {
+    console.error('Failed to load Japan GeoJSON', error);
+    return JapanGeoJSON;
+  }
+}
+
+export const OfficeID2PrefName = {
   "100000": "群馬県",
   "110000": "埼玉県",
   "120000": "千葉県",
@@ -67,7 +78,7 @@ const OfficeID2PrefName = {
 
 // https://xml.kishou.go.jp/tec_material.html
 // jmaxml_20220314_Code.zip -> 地震火山関連コード表.xls -> [sheet "22"]
-const AreaForecastLocalEEW = [
+export const AreaForecastLocalEEW = [
   [ "9011", "北海道道央", "ほっかいどうどうおう" ],
   [ "9012", "北海道道南", "ほっかいどうどうなん" ],
   [ "9013", "北海道道北", "ほっかいどうどうほく" ],
@@ -129,7 +140,7 @@ const AreaForecastLocalEEW = [
 // https://xml.kishou.go.jp/tec_material.html
 // https://www.data.jma.go.jp/suishin/shiyou/pdf/no40202 を元に作成
 // jmaxml_20220314_Code.zip -> 地震火山関連コード表.xls -> [sheet "24"]
-const AreaForecastLocalE = {
+export const AreaForecastLocalE = {
   "100": {
     "name": "石狩地方北部",
     "kana": "いしかりちほうほくぶ",
@@ -1074,7 +1085,7 @@ const AreaForecastLocalE = {
 
 // https://xml.kishou.go.jp/tec_material.html
 // jmaxml_20220314_Code.zip -> 地震火山関連コード表.xls -> [sheet "41"]
-const AreaCode2Epicenter = {
+export const AreaCode2Epicenter = {
   "011": "北海道地方",
   "012": "東北地方",
   "013": "北陸地方",
@@ -1420,7 +1431,7 @@ const AreaCode2Epicenter = {
   "999": "遠地"
 };
 
-const AreaEpicenter2Code = {
+export const AreaEpicenter2Code = {
   "石狩地方北部": "100",
   "石狩地方中部": "101",
   "石狩地方南部": "102",

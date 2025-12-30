@@ -1,14 +1,26 @@
 'use strict';
 
+import './uncategorized/prototype-extension';
 import { RequestURL } from './data/requestURL';
 import './data/jmaDataOperator';
 import { getRiverPoints } from './data/riverPoints';
 import { multilingualQuake } from './data/multilingual-quake';
+import { AreaForecastLocalM } from './uncategorized/data-AreaForecastLocalM';
+import { epicenter_list } from './uncategorized/data-epicenter';
+import { AreaForecastLocalE, AreaEpicenter2Code, OfficeID2PrefName, JapanGeoJSON, loadJapanGeojson } from './data/japan';
+import { AudioSpeechController, AudioSpeaker } from './uncategorized/init-speechController';
+import type { AudioSpeechQueueParam } from './uncategorized/init-speechController';
 import { renderQuakeView, quakeRenderState, prepareQuakeState } from './routines/quakeView';
 import { renderEewView } from './routines/eewView';
 import { renderNormalTitle } from './routines/normalView';
 import { NewsOperator, renderNewsView, renderNewsStandbyList, renderNewsTitle } from './routines/newsView';
 import { advanceTsunamiPage, createTsunamiOverlayState, renderTsunamiOverlay, setTsunamiCancelled, setTsunamiIssued, updateTsunamiList } from './routines/tsunamiView';
+import { Variable_Animation } from './uncategorized/variable-animation';
+import { connect2sandbox } from './uncategorized/init-sandbox';
+import { canvas1, context, time } from './uncategorized/init-canvas';
+import { FontFamilies, colorScheme, colorThemeMode, setColorThemeMode } from './uncategorized/config';
+import { loadFonts } from './uncategorized/init-fontOperator';
+
 
 // import easyXhr from "./modules/easyXhr.js";
 
@@ -78,7 +90,6 @@ const SpeechVersionData = {
   speaker16: "",
   speaker8: "0.5.0",
 };
-
 // エラー処理
 const errorCollector = {
   displayError: true,
@@ -2103,6 +2114,8 @@ const Routines = {
   }
 };
 
+loadFonts({ getViewMode: () => viewMode, routines: Routines });
+
 function audiodebug_interval(index = 0){
   setTimeout(audiodebug_interval, 1000, index);
   try {
@@ -2283,8 +2296,12 @@ async function eewMapDraw(longitude: number, latitude: number, warnAreas: any[] 
     if (longitude<128) eewEpiPos[0] += (longitude-128)*3;
   }
   if (longitude>146) eewEpiPos[0] += (longitude-146)*3;
-  const connect2sandbox = (window as any).connect2sandbox as ((name: string, payload: any) => Promise<number>) | undefined;
-  let magnification = connect2sandbox ? await connect2sandbox("quakemap_calc_magnification", { warn: warnAreas, lon: longitude, lat: latitude }) : 1;
+  let magnification = 1;
+  try {
+    magnification = await connect2sandbox("quakemap_calc_magnification", { warn: warnAreas, lon: longitude, lat: latitude });
+  } catch (error) {
+    console.warn("connect2sandbox unavailable; using magnification=1", error);
+  }
   lineWidth = 2.5/Math.max(magnification, 2.5);
   // console.log("magnification = "+magnification+"\n    lineWidth = "+lineWidth);
 
@@ -2293,7 +2310,8 @@ async function eewMapDraw(longitude: number, latitude: number, warnAreas: any[] 
   context.fillRect(905, 0, 175, 128);
   context.strokeStyle = colorThemeMode != 2 ? "#333" : "#aaa";
   context.lineWidth = lineWidth;
-  const japanGeo = (Japan_geojson as any)?.features ?? [];
+  if (!JapanGeoJSON?.features) await loadJapanGeojson(connect2sandbox);
+  const japanGeo = (JapanGeoJSON as any)?.features ?? [];
   japanGeo.forEach(function(int: any){
     if (warnAreas.includes(int.properties.code)) context.fillStyle = colorThemeMode != 2 ? "#fdab29" : "#ffed4a"; else context.fillStyle = colorThemeMode != 2 ? "#32a852" : "#666";
     switch (int.geometry.type) {
@@ -4016,7 +4034,7 @@ export const byteToString = (byte: bigint | number) => {
           if (typeCell) typeCell.setAttribute("data-type", item.type);
         });
       }
-      colorThemeMode = data.settings?.theme?.color ?? 0;
+      setColorThemeMode(data.settings?.theme?.color ?? 0);
       audioAPI.setGainTimer(data.settings?.gainPrograms ?? []);
 
       if(isSaveForced) savedata();
@@ -4275,7 +4293,7 @@ addClickListener("speech-test1", function (){
 
 addClickListener("dataSaver", () => { savedata(); });
 addClickListener("unitsReflect", () => {rain_windData(true);});
-document.getElementsByName("themeColors")[0].addEventListener('change', function (){ colorThemeMode = Number((document.getElementsByName("themeColors")[0] as HTMLInputElement).value); if(viewMode === 0){ Routines.md0title(); }; Routines.subCanvasTime(getAdjustedDate()); });
+document.getElementsByName("themeColors")[0].addEventListener('change', function (){ setColorThemeMode(Number((document.getElementsByName("themeColors")[0] as HTMLInputElement).value)); if(viewMode === 0){ Routines.md0title(); }; Routines.subCanvasTime(getAdjustedDate()); });
 ["setIntervalIedred","setIntervalNHKquake","setIntervalJmaWt","setIntervalWarn","setIntervalTenkiJpTsu","setIntervalTyphCom","setIntervalWNImscale","setIntervalWNIsorabtn","setIntervalWNIriver","setIntervalTpcBlackOut"].forEach(clampInputRange);
 
 addInputListener('volEEWl1', target => { SFXController.volume(sounds.eew.first, target.valueAsNumber / 100); });

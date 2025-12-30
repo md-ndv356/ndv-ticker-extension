@@ -1,4 +1,4 @@
-const epicenter_list = [
+export const epicenter_list = [
 	[
 		"北海道地方",
 		"東北地方",

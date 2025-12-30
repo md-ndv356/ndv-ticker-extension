@@ -1,4 +1,8 @@
-const RequestURL = {
+type ColorLeaf = string | CanvasGradient | null;
+type ColorNode = ColorLeaf | ColorLeaf[];
+type ColorScheme = ColorNode[][][];
+
+export const RequestURL = {
   iedred7584_eew: "https://api.iedred7584.com/eew/json/",
   yahoo_kmoni_eew: "https://weather-kyoshin.west.edge.storage-yahoo.jp/RealTimeData/{yyyyMMdd}/{yyyyMMddHHmmss}.json",
   lmoni_eew: "https://www.lmoni.bosai.go.jp/monitor/webservice/hypo/eew/{yyyyMMddHHmmss}.json",
@@ -17,78 +21,88 @@ const RequestURL = {
   wniliveTimeTable: "https://smtgvs.weathernews.jp/a/solive_timetable/timetable.json"
 };
 
-// フォントファミリー設定
-const FontFamilies = {
+export const FontFamilies = {
   sans: '"Inter", "ヒラギノ角ゴシック", BlinkMacSystemFont, "Noto Sans JP", "游ゴシック", "YuGothic", "Noto Sans CJK", "Meiryo", "Helvetica Neue", "Helvetica", "Arial", sans-serif',
   serif: '"Source Serif", "ヒラギノ明朝", "MS P明朝", serif'
 };
+
 document.documentElement.style.setProperty("--font-sans", FontFamilies.sans);
 document.documentElement.style.setProperty("--font-serif", FontFamilies.serif);
 
-// Mスケールによって変わる配色設定
-const colorScheme = [
+const workingContext = document.createElement('canvas').getContext('2d');
+
+export const colorScheme: ColorScheme = [
   [
-    ["#2e75e8","#d1d900","#ff3d3d"],
-    [   null  ,   null  ,   null  ], // 背景色
-    ["#71f043","#c852ff","#ffffff"],
-    ["#fcfefa","#7e3287","#f0ff4a"], // テキスト色
-    ["#777","#ddd4bf"], // 待機中のタイトル色 (M2 と その他)
-    ["#fff","#333","#d6231d",["#fff","#333","#fff"],"#1144ed"],
-    ["#370921","#ddd","#ffa13d","#393939"] // 時計の色
-  ], // light mode
+    ["#2e75e8", "#d1d900", "#ff3d3d"],
+    [null, null, null],
+    ["#71f043", "#c852ff", "#ffffff"],
+    ["#fcfefa", "#7e3287", "#f0ff4a"],
+    ["#777", "#ddd4bf"],
+    ["#fff", "#333", "#d6231d", ["#fff", "#333", "#fff"], "#1144ed"],
+    ["#370921", "#ddd", "#ffa13d", "#393939"]
+  ],
   [
-    ["#302ad1","#d1c12c","#a81b1b"],
-    [   null  ,   null  ,   null  ], // done
-    ["#71f043","#c852ff","#fff"],
-    ["#fff","#fff","#fff"], // done
-    ["#666","#bbb"], // done
-    ["#333","#fff","#e6e85d",["#fff","#333","#fff"],"#1144ed"], // done
-    ["#370921","#ddd","#ffa13d","#393939"] // 時計の色
-  ], // dark mode
+    ["#302ad1", "#d1c12c", "#a81b1b"],
+    [null, null, null],
+    ["#71f043", "#c852ff", "#fff"],
+    ["#fff", "#fff", "#fff"],
+    ["#666", "#bbb"],
+    ["#333", "#fff", "#e6e85d", ["#fff", "#333", "#fff"], "#1144ed"],
+    ["#370921", "#ddd", "#ffa13d", "#393939"]
+  ],
   [
-    ["#555555","#555555","#555555"],
-    ["#444",null,null],
-    [null,null,null],
-    ["#fff","#fff","#fff"],
-    ["#ddd","#ddd"],
-    ["#333","#fff","#ffb",["#fff","#fff","#fff"],"#555"], // done
-    ["#333","#ddd","#fff","#333"]
-  ]  // mono style
+    ["#555555", "#555555", "#555555"],
+    ["#444", null, null],
+    [null, null, null],
+    ["#fff", "#fff", "#fff"],
+    ["#ddd", "#ddd"],
+    ["#333", "#fff", "#ffb", ["#fff", "#fff", "#fff"], "#555"],
+    ["#333", "#ddd", "#fff", "#333"]
+  ]
 ];
-{
-  let gradient = context.createLinearGradient(0, 0, 1080, 0);
+
+if (workingContext) {
+  let gradient = workingContext.createLinearGradient(0, 0, 1080, 0);
   gradient.addColorStop(0, "#105396");
-  gradient.addColorStop(1, "#428edd"); // gradient.addColorStop(1, "#377fcd");
+  gradient.addColorStop(1, "#428edd");
   colorScheme[0][1][0] = gradient;
-  gradient = context.createLinearGradient(0, 0, 1080, 0);
+
+  gradient = workingContext.createLinearGradient(0, 0, 1080, 0);
   gradient.addColorStop(0, "#ffef35");
   gradient.addColorStop(1, "#fedb85");
   colorScheme[0][1][1] = gradient;
-  gradient = context.createLinearGradient(0, 0, 1080, 0);
+
+  gradient = workingContext.createLinearGradient(0, 0, 1080, 0);
   gradient.addColorStop(0, "#df261d");
   gradient.addColorStop(1, "#b21418");
   colorScheme[0][1][2] = gradient;
-  gradient = context.createLinearGradient(0, 0, 0, 60);
+
+  gradient = workingContext.createLinearGradient(0, 0, 0, 60);
   gradient.addColorStop(0, "#3a37bd");
   gradient.addColorStop(1, "#151299");
   colorScheme[1][1][0] = gradient;
-  gradient = context.createLinearGradient(0, 0, 0, 60);
+
+  gradient = workingContext.createLinearGradient(0, 0, 0, 60);
   gradient.addColorStop(0, "#b3a425");
   gradient.addColorStop(1, "#c7b830");
   colorScheme[1][1][1] = gradient;
-  gradient = context.createLinearGradient(0, 0, 0, 60);
+
+  gradient = workingContext.createLinearGradient(0, 0, 0, 60);
   gradient.addColorStop(0, "#d91c18");
   gradient.addColorStop(1, "#b01815");
   colorScheme[1][1][2] = gradient;
-  gradient = context.createLinearGradient(0, 20, 0, 60);
+
+  gradient = workingContext.createLinearGradient(0, 20, 0, 60);
   gradient.addColorStop(0.75, "#444");
   gradient.addColorStop(1.00, "#882");
   colorScheme[2][1][1] = gradient;
-  gradient = context.createLinearGradient(0, 20, 0, 60);
+
+  gradient = workingContext.createLinearGradient(0, 20, 0, 60);
   gradient.addColorStop(0.00, "#444");
   gradient.addColorStop(0.75, "#723");
   gradient.addColorStop(1.00, "#a12");
   colorScheme[2][1][2] = gradient;
 }
-// color theme code
-var colorThemeMode = 0;
+
+export let colorThemeMode = 0;
+export const setColorThemeMode = (mode: number) => { colorThemeMode = mode; };

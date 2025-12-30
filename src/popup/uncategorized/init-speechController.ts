@@ -1,5 +1,17 @@
+import { AreaCode2Epicenter, AreaForecastLocalE } from '../data/japan';
+import { AreaForecastLocalM } from './data-AreaForecastLocalM';
+
+import JSZip from 'jszip';
+
+export type AudioSpeechQueueParam =
+  | { type: "direct"; data: AudioBuffer; gain?: number }
+  | { type: "path"; path: string; speakerId: string; gain?: number }
+  | { type: "id"; id: string }
+  | { type: "skip" }
+  | { type: "wait"; time: number };
+
 // 2つ同時に鳴らせるようにするのも考えたけど、よく考えたら2つ同時に鳴らす意味なかった
-class AudioSpeechController extends EventTarget {
+export class AudioSpeechController extends EventTarget {
   /**
    * @typedef {({ type: "direct", data: AudioBuffer, gain?: Number } | { type: "path", path: String, speakerId: String, gain?: Number } | { type: "id", id: String } | { type: "skip" } | { type: "wait", time: Number })} AudioSpeechQueueParam
    * @typedef {({ type: "direct", data: AudioBuffer, gain: Number } | { type: "id", id: String } | { type: "skip" } | { type: "wait", time: Number })} AudioSpeechQueueItem
@@ -78,7 +90,7 @@ class AudioSpeechController extends EventTarget {
    * @param {BaseAudioContext} audioContext
    * constで上手い感じにできたらconstructorに移動させようかな
    */
-  async init (audioContext, connectDestination = audioContext.destination){
+  async init (audioContext: BaseAudioContext, connectDestination = audioContext.destination){
     if (this.isInitializing) return; // 多重防止
     this.#checkArgumentNumber(1, arguments.length, "init");
     this.#argumentValidation(audioContext, AudioContext, "init");
@@ -114,7 +126,7 @@ class AudioSpeechController extends EventTarget {
    * 読み上げ全体の音量を取得／設定します。
    * @param {Number} changeTo 規定値: 1
    */
-  set volume (changeTo){
+  set volume (changeTo: number){
     if (this.#wholeGain) this.#wholeGain.gain.value = changeTo - 0;
     const inputEvent = new CustomEvent("volumeInput", { detail: {value: changeTo} });
     this.dispatchEvent(inputEvent);
@@ -138,7 +150,7 @@ class AudioSpeechController extends EventTarget {
    * @param {AudioSpeechQueueParam} param
    * @returns {AudioSpeechQueueItem}
    */
-  #qParam2qItem (param){
+  #qParam2qItem (param: AudioSpeechQueueParam): AudioSpeechQueueItem {
     switch (param.type){
       case "direct":
         return { type: "direct", data: param.data, gain: param.gain ?? 1 };
@@ -208,10 +220,10 @@ class AudioSpeechController extends EventTarget {
 
   /**
    * speechStatusイベントを配信する
-   * @param {Number} code ステータスコード
-   * @param {?any} data データ
+   * @param code ステータスコード
+   * @param data データ
    */
-  #speechStatusEvent (code, data){
+  #speechStatusEvent (code: number, data: any = null){
     this.dispatchEvent(new CustomEvent("speechStatus", {
       detail: { code, data }
     }));
@@ -219,10 +231,10 @@ class AudioSpeechController extends EventTarget {
 
   /**
    * IDからAudioBufferを取得する
-   * @param {String} id ID
-   * @param {String[]} loopDetect ループを検知するID
+   * @param id ID
+   * @param loopDetect ループを検知するID
    */
-  #getSourceFromId (id, loopDetect = []){
+  #getSourceFromId (id: string, loopDetect: string[] = []){
     if (!Object.hasOwn(this.#speechData.fromId, id)) return;
     /** @type {AudioSpeechQueueItem} */
     const target = this.#speechData.fromId[id];
@@ -264,7 +276,7 @@ class AudioSpeechController extends EventTarget {
    * @param {Number?} gain audioDataそのものの音量
    * @returns {Promise}
    */
-  #startBufferSync (audioData, gain = 1){
+  #startBufferSync (audioData: AudioBuffer, gain: number = 1): Promise<void> {
     // console.log(audioData);
     return new Promise(resolve => {
       if (!audioData) resolve();
@@ -283,7 +295,7 @@ class AudioSpeechController extends EventTarget {
    * @param {AudioBuffer} audioData 音声データ
    * @returns {AudioBufferSourceNode}
    */
-  #initABSNode (destination, audioData){
+  #initABSNode (destination: AudioNode, audioData: AudioBuffer): AudioBufferSourceNode {
     // const items = this.#hiddenItems;
     // console.log(items.buffer);
     if (this.#bufferSource){
@@ -301,7 +313,7 @@ class AudioSpeechController extends EventTarget {
    * 特定のスピーカーの音声を全て初期化
    * @param {AudioContext} audioContext
    */
-  async #initSpeaker (audioContext){
+  async #initSpeaker (audioContext: BaseAudioContext){
     const ZipData = {};
     for (const speaker of this.#speakers){
       if (speaker.isAvaliable){
@@ -352,7 +364,7 @@ class AudioSpeechController extends EventTarget {
    * @param {Number} presented 入力数
    * @param {String} functionName 関数名
    */
-  #checkArgumentNumber (required, presented, functionName = ""){
+  #checkArgumentNumber (required: number, presented: number, functionName: string = ""){
     if (presented < required){
       if (functionName) functionName = " '" + functionName + "' on 'AudioSpeechController'";
       throw new TypeError("Failed to execute" + functionName + ": " + required + " argument required, but only " + presented + " present.");
@@ -365,7 +377,7 @@ class AudioSpeechController extends EventTarget {
    * @param {*} type タイプ
    * @param {String} functionName 関数名
    */
-  #argumentValidation (input, type, functionName = ""){
+  #argumentValidation (input: any, type: any, functionName: string = ""){
     if (!(input instanceof type)){
       if (functionName) functionName = " '" + functionName + "' on 'AudioSpeechController'";
       throw new TypeError("Failed to execute" + functionName + ": " + "The provided value is not of type '" + type.name + "'.");
@@ -373,7 +385,7 @@ class AudioSpeechController extends EventTarget {
   }
 }
 
-class AudioSpeaker {
+export class AudioSpeaker {
   static displayName = "AudioSpeaker";
   #speakerData = {};
   #speakerId = "";
@@ -385,7 +397,7 @@ class AudioSpeaker {
    * @param {String} version
    * @param {?Boolean} isAvaliable
    */
-  constructor (id, name, gender, version, isAvaliable){
+  constructor (id: string, name: string, gender: "male" | "female" | null, version: string, isAvaliable?: boolean){
     if (arguments.length < 2) throw new TypeError("Failed to construct 'AudioSpeaker': 2 argument required, but only " + arguments.length + " present.")
     if (id.includes("/") || id.includes("\\") || id.includes("?") || id.includes("#")) throw TypeError("Invalid characters are included in the ID.");
     if (version.includes("/") || version.includes("\\") || version.includes("?") || version.includes("#")) throw TypeError("Invalid characters are included in the ID.");
@@ -416,3 +428,5 @@ class AudioSpeaker {
     return this.#speakerData.version;
   }
 }
+
+// Module consumers should import the exports above. Globals are intentionally omitted to avoid duplicate initialization.
