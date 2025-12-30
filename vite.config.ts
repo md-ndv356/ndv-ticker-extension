@@ -69,6 +69,7 @@ const manifest = defineManifest({
 
 export default defineConfig({
   plugins: [crx({ manifest })],
+  publicDir: "src/public",
   build: {
     sourcemap: true,
     emptyOutDir: true,
@@ -76,12 +77,13 @@ export default defineConfig({
       input: {
         background: "src/background/index.ts",
         popup: "src/popup/index.html",
+        sandbox: "src/popup/sandbox.html",
         "disp-commands": "src/disp-commands/index.html"
       },
       // output: {
       //   entryFileNames: `src/[name].js`,
       //   chunkFileNames: `src/[name]-[hash].js`,
-      //   assetFileNames: `assets/[name]-[hash].[ext]`
+      //   assetFileNames: `src/[name]-[hash].[ext]`
       // }
     }
   }

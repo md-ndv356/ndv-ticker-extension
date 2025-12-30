@@ -43,7 +43,7 @@ export function renderTsunamiOverlay(params: {
   state: TsunamiOverlayState;
   timeCount: number;
 }) {
-  const { context, colorScheme, colorThemeMode, fontSans, viewMode, viewType, state, timeCount } = params;
+  const { context, colorScheme: _1, colorThemeMode: _2, fontSans, viewMode, viewType, state, timeCount } = params;
   if (state.isCancelled || viewMode === 1 || viewType !== 1) return false;
 
   const { page, texts } = state;

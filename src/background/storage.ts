@@ -140,17 +140,19 @@ const defaultAppConfig: AppConfig = {
 
 let appConfigCache: AppConfig | null = null;
 
-const loadCache = async () => {
+const loadCache = async (): Promise<AppConfig> => {
   if (appConfigCache === null) {
     const result = (await chrome.storage.local.get(["info", "config"])) as {
       info?: Partial<AppConfig["info"]>;
       config?: AppConfig["config"];
     };
 
-    appConfigCache = {
+    return appConfigCache = {
       info: { ...defaultAppConfig.info, ...(result.info ?? {}) },
       config: result.config == null ? defaultAppConfig.config : result.config
     };
+  } else {
+    return appConfigCache;
   }
 }
 
@@ -158,10 +160,10 @@ const loadCache = async () => {
 // Key is capable of dot chain (e.g., "config.ticker.scrollSpeed")
 export const read = async (): Promise<AppConfig> => {
   if (appConfigCache === null) {
-    await loadCache();
+    appConfigCache = await loadCache();
   }
 
-  return appConfigCache!;
+  return appConfigCache;
 }
 
 export const save = async (value: AppConfig): Promise<void> => {
@@ -169,23 +171,24 @@ export const save = async (value: AppConfig): Promise<void> => {
   await chrome.storage.local.set(value);
 }
 
+/**
+ * @param key キー（チェーン記法が有効）
+ * @param val 設定する値
+ */
 export const setValue = async (key: string, val: any): Promise<void> => {
   if (appConfigCache === null) {
-    await loadCache();
+    appConfigCache = await loadCache();
   }
 
   const keyParts = key.split(".");
-  let obj: any = appConfigCache;
+  let obj: Partial<AppConfig> | undefined = appConfigCache;
   for (let i = 0; i < keyParts.length - 1; i++) {
-    const part = keyParts[i];
-    if (obj[part] === undefined) {
-      obj[part] = {};
-    }
-    obj = obj[part];
+    obj = obj[keyParts.at(i) as keyof typeof obj] as Partial<AppConfig> | undefined;
+    if (obj === undefined) throw new Error("Invalid key path: " + key);
   }
-  obj[keyParts[keyParts.length - 1]] = val;
+  obj[keyParts.at(-1) as keyof Partial<AppConfig>] = val;
 
-  await chrome.storage.local.set(appConfigCache!);
+  await chrome.storage.local.set(appConfigCache);
 }
 
 export const reset = async () => {

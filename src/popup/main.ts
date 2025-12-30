@@ -267,32 +267,32 @@ type Sounds = {
 
 const Assets: { sound: Sounds } = {
   sound: {
-    start: { _src: "../public/sound/main-started.mp3" },
+    start: { _src: new URL("/src/assets/sound/main-started.mp3", import.meta.url).href },
     quake: {
-      normal: { _src: "../public/sound/quake-notice.mp3" },
-      major: { _src: "../public/sound/quake-major.mp3" },
+      normal: { _src: new URL("/src/assets/sound/quake-notice.mp3", import.meta.url).href },
+      major: { _src: new URL("/src/assets/sound/quake-major.mp3", import.meta.url).href },
     },
     warning: {
-      Notice: { _src: "../public/sound/warn-tornado.mp3" },
-      GroundLoosening: { _src: "../public/sound/warn-ground.mp3" },
-      Emergency: { _src: "../public/sound/warn-emergency.mp3" },
-      HeavyRain: { _src: "../public/sound/warn-heavyrain.mp3" },
-      Flood5: { _src: "../public/sound/warn-flood5.mp3" },
-      Flood4: { _src: "../public/sound/warn-flood4.mp3" },
+      Notice: { _src: new URL("/src/assets/sound/warn-tornado.mp3", import.meta.url).href },
+      GroundLoosening: { _src: new URL("/src/assets/sound/warn-ground.mp3", import.meta.url).href },
+      Emergency: { _src: new URL("/src/assets/sound/warn-emergency.mp3", import.meta.url).href },
+      HeavyRain: { _src: new URL("/src/assets/sound/warn-heavyrain.mp3", import.meta.url).href },
+      Flood5: { _src: new URL("/src/assets/sound/warn-flood5.mp3", import.meta.url).href },
+      Flood4: { _src: new URL("/src/assets/sound/warn-flood4.mp3", import.meta.url).href },
     },
     tsunami: {
-      notice: { _src: "../public/sound/tsunami-0.mp3" },
-      watch: { _src: "../public/sound/tsunami-1.mp3" },
-      warning: { _src: "../public/sound/tsunami-2.mp3" },
-      majorwarning: { _src: "../public/sound/tsunami-3.mp3" },
-      obs: { _src: "../public/sound/tsunami-obs.mp3" },
+      notice: { _src: new URL("/src/assets/sound/tsunami-0.mp3", import.meta.url).href },
+      watch: { _src: new URL("/src/assets/sound/tsunami-1.mp3", import.meta.url).href },
+      warning: { _src: new URL("/src/assets/sound/tsunami-2.mp3", import.meta.url).href },
+      majorwarning: { _src: new URL("/src/assets/sound/tsunami-3.mp3", import.meta.url).href },
+      obs: { _src: new URL("/src/assets/sound/tsunami-obs.mp3", import.meta.url).href },
     },
     eew: {
-      plum: { _src: "../public/sound/eew-plum.mp3" },
-      first: { _src: "../public/sound/eew-first.mp3" },
-      continue: { _src: "../public/sound/eew-continue.mp3" },
-      last: { _src: "../public/sound/eew-last.mp3" },
-      custom: { _src: "../public/sound/eew-custom.mp3" },
+      plum: { _src: new URL("/src/assets/sound/eew-plum.mp3", import.meta.url).href },
+      first: { _src: new URL("/src/assets/sound/eew-first.mp3", import.meta.url).href },
+      continue: { _src: new URL("/src/assets/sound/eew-continue.mp3", import.meta.url).href },
+      last: { _src: new URL("/src/assets/sound/eew-last.mp3", import.meta.url).href },
+      custom: { _src: new URL("/src/assets/sound/eew-custom.mp3", import.meta.url).href },
     }
   }
 };
@@ -399,7 +399,7 @@ const audioAPI = (() => {
       target.add(new Option("読み上げ音量", "speech"));
       const button = document.createElement("button");
       const removeImg = document.createElement("img");
-      removeImg.src = "/src/public/image/remove.svg";
+      removeImg.src = new URL("/src/assets/image/remove.svg", import.meta.url).href;
       span1.textContent = " - ";
       span2.textContent = "に";
       span3.textContent = "を";
@@ -853,7 +853,7 @@ const textureFonts = images.texture as Record<string, any>;
     const target = textureFonts[s.base]?.[s.weight ? s.weight : "none"]?.[s.px];
     if (!target) continue;
 
-    let baseurl = "/src/public/image/texture/"+s.base+"_"+s.px+"px"+(s.weight?"_"+s.weight:"");
+    let baseurl = "/texture/"+s.base+"_"+s.px+"px"+(s.weight?"_"+s.weight:"");
     if(!target.data){
       target.data = {};
       const xhr: XhrWithExtras = new XMLHttpRequest() as XhrWithExtras;
@@ -1012,15 +1012,15 @@ HTMLImageElement.prototype.toImageData = function (){
   return __toImageDataCtx.getImageData(0, 0, this.width, this.height);
 };
 
-images.texture.EEW_epicenter_JP_350.image.src = "/src/public/image/texture/eew_epicenter_JP_limit350.png";
-fetch("/src/public/image/texture/eew_epicenter_JP_limit350.json").then(response => response.json()).then(json => {
+images.texture.EEW_epicenter_JP_350.image.src = "/texture/eew_epicenter_JP_limit350.png";
+fetch("/texture/eew_epicenter_JP_limit350.json").then(response => response.json()).then(json => {
   images.texture.EEW_epicenter_JP_350.data = json;
 });
-images.texture.EEW_epicenter_JP_328.image.src = "/src/public/image/texture/eew_epicenter_JP_limit328.png";
-fetch("/src/public/image/texture/eew_epicenter_JP_limit328.json").then(response => response.json()).then(json => {
+images.texture.EEW_epicenter_JP_328.image.src = "/texture/eew_epicenter_JP_limit328.png";
+fetch("/texture/eew_epicenter_JP_limit328.json").then(response => response.json()).then(json => {
   images.texture.EEW_epicenter_JP_328.data = json;
 });
-images.texture.EEW_intensity.src = "/src/public/image/texture/eew_intensity.png";
+images.texture.EEW_intensity.src = "/texture/eew_intensity.png";
 
 const __drawTextureImage = (function(){
   // Keep this callable to satisfy any existing "(type, x, y, option) => void" typing in the project.
@@ -1079,6 +1079,8 @@ const __drawTextureImage = (function(){
 
 const sorabtn_qr_img = new Image() as TextureImageWithBitmap;
 {
+  const textPaths = import.meta.glob('/src/assets/image/**/*.png', { as: 'url', eager: true });
+
   const onImageLoaded = (ev: Event) => {
     const target = ev.currentTarget as TextureImageWithBitmap | null;
     if (!target) return;
@@ -1087,40 +1089,40 @@ const sorabtn_qr_img = new Image() as TextureImageWithBitmap;
       target.imgBmp = bmp;
     });
   };
-  sorabtn_qr_img.addEventListener("load", onImageLoaded); sorabtn_qr_img.src = "/src/public/image/sorabtn.png";
-  images.eew.fc.addEventListener("load", onImageLoaded); images.eew.fc.src = "/src/public/image/eew1234.png";
-  images.eew.pub.addEventListener("load", onImageLoaded); images.eew.pub.src = "/src/public/image/eew567.png";
-  images.eew.cancel.addEventListener("load", onImageLoaded); images.eew.cancel.src = "/src/public/image/eewCancelled.png";
+  sorabtn_qr_img.addEventListener("load", onImageLoaded); sorabtn_qr_img.src = textPaths["/src/assets/image/sorabtn.png"];
+  images.eew.fc.addEventListener("load", onImageLoaded); images.eew.fc.src = textPaths["/src/assets/image/eew1234.png"];
+  images.eew.pub.addEventListener("load", onImageLoaded); images.eew.pub.src = textPaths["/src/assets/image/eew567.png"];
+  images.eew.cancel.addEventListener("load", onImageLoaded); images.eew.cancel.src = textPaths["/src/assets/image/eewCancelled.png"];
   for (let i=0; i<3; i++) for (let j=0; j<3; j++) {
     const img = images.quake.title[i][j];
     img.addEventListener("load", onImageLoaded);
-    img.src = "/src/public/image/theme"+i+"quakeTop"+j+".png";
+    img.src = textPaths["/src/assets/image/theme"+i+"quakeTop"+j+".png"];
   }
   for (let i=0; i<3; i++) {
     images.quake.texts.maxInt.push({ ja:[], en:[] });
     for (let j=0; j<9; j++) {
       images.quake.texts.maxInt[i].ja[j] = new Image();
       images.quake.texts.maxInt[i].en[j] = new Image();
-      images.quake.texts.maxInt[i].ja[j].src = `/src/public/image/texts/maxint/mscale${i}/ja/${j}.png`;
-      images.quake.texts.maxInt[i].en[j].src = `/src/public/image/texts/maxint/mscale${i}/en/${j}.png`;
+      images.quake.texts.maxInt[i].ja[j].src = textPaths[`/src/assets/image/texts/maxint/mscale${i}/ja/${j}.png`];
+      images.quake.texts.maxInt[i].en[j].src = textPaths[`/src/assets/image/texts/maxint/mscale${i}/en/${j}.png`];
     }
   }
-  images.quake.texts.magni.src = "/src/public/image/texts/magnitude.png";
-  images.quake.texts.magni2.src = "/src/public/image/texts/M2-magnitude.png";
-  images.quake.texts.depth.ja.src = "/src/public/image/texts/depth-ja.png";
-  images.quake.texts.depth.ja2.src = "/src/public/image/texts/M2-depth-ja.png";
-  images.quake.texts.depth.en.src = "/src/public/image/texts/depth-en.png";
-  images.quake.texts.depth.en2.src = "/src/public/image/texts/M2-depth-en.png";
-  images.quake.texts.depth_km.src = "/src/public/image/texts/depth-km.png";
-  images.quake.texts.depth_km2.src = "/src/public/image/texts/M2-depth-km.png";
-  images.fullview.src = "/src/public/image/fullview-message.png";
+  images.quake.texts.magni.src = textPaths["/src/assets/image/texts/magnitude.png"];
+  images.quake.texts.magni2.src = textPaths["/src/assets/image/texts/M2-magnitude.png"];
+  images.quake.texts.depth.ja.src = textPaths["/src/assets/image/texts/depth-ja.png"];
+  images.quake.texts.depth.ja2.src = textPaths["/src/assets/image/texts/M2-depth-ja.png"];
+  images.quake.texts.depth.en.src = textPaths["/src/assets/image/texts/depth-en.png"];
+  images.quake.texts.depth.en2.src = textPaths["/src/assets/image/texts/M2-depth-en.png"];
+  images.quake.texts.depth_km.src = textPaths["/src/assets/image/texts/depth-km.png"];
+  images.quake.texts.depth_km2.src = textPaths["/src/assets/image/texts/M2-depth-km.png"];
+  images.fullview.src = textPaths["/src/assets/image/fullview-message.png"];
   for (let i=0; i<11; i++) {
     const zero = images.quake.texts.intensity["#ffffff"];
     const one = images.quake.texts.intensity["#333333"];
     zero[i] = new Image();
-    zero[i].src = "/src/public/image/texts/intensity/ffffff/"+i+".png";
+    zero[i].src = textPaths["/src/assets/image/texts/intensity/ffffff/"+i+".png"];
     one[i] = new Image();
-    one[i].src = "/src/public/image/texts/intensity/333333/"+i+".png";
+    one[i].src = textPaths["/src/assets/image/texts/intensity/333333/"+i+".png"];
   }
 };
 
@@ -2777,7 +2779,7 @@ export function notification(type: string, title: string, msg: string, id: strin
   switch (type) {
     case "create":
       chrome.notifications.create(id, {
-          iconUrl: '/src/public/image/icon128.png',
+          iconUrl: new URL('/src/assets/image/icon128.png', import.meta.url).href,
           type: 'basic',
           title: title,
           message: msg,
@@ -2787,7 +2789,7 @@ export function notification(type: string, title: string, msg: string, id: strin
       //b:title, c:message, d:notificationid, e:priority
     case "update":
       chrome.notifications.update(id, {
-          iconUrl: '/src/public/image/icon128.png',
+          iconUrl: new URL('/src/assets/image/icon128.png', import.meta.url).href,
           type: 'basic',
           title: title,
           message: msg,

@@ -32,8 +32,8 @@ export function renderEewView(deps: EewRenderDeps): { shouldExit: boolean } {
   const {
     context,
     images,
-    colorScheme,
-    colorThemeMode,
+    colorScheme: _1,
+    colorThemeMode: _2,
     fontSans,
     drawTextureImage,
     DrawTextureText,
