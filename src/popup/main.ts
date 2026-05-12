@@ -2,7 +2,7 @@
 
 import './bootstrap/prototype-extension.ts';
 import { RequestURL } from './config/requestURL.ts';
-import { DataOperator } from './services/jma/jmaDataOperator.ts';
+import { DataOperator } from './services/jma/index.ts';
 import { TrafficTracker } from "./ui/TrafficTracker.ts";
 import { getRiverPoints } from './services/riverPoints.ts';
 import { multilingualQuake } from './dictionaries/multilingual-quake.ts';
