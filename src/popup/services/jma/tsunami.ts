@@ -1,4 +1,4 @@
-import { TrafficTracker } from "../../ui/TrafficTracker.ts";
+import { TrafficTracker } from "../../ui/trafficTracker.ts";
 import { AdditionalComments, translateMaxHeight } from "./common.ts";
 import type { VTSE41 } from "../../../types/jma-json/qt/report-vtse41.js";
 import type { VTSE51 } from "../../../types/jma-json/qt/report-vtse51.js";
