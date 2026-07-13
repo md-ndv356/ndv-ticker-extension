@@ -4,14 +4,15 @@ export type NormalTitleDeps = {
   colorThemeMode: number;
   mscale: number;
   fontSans: string;
-  normalItems: Array<{ title?: string }>;
-  directTexts: string[];
-  viewingTextIndex: number;
-  textCount: number;
+  /** 表示中の項目のタイトル */
+  currentTitle: string;
+  /** 次に表示する項目のタイトル */
+  nextTitle: string;
   t_viewType: number;
   t_Cancelled: boolean;
 };
 
+/** 通常画面のタイトル部（上段）を描画する。津波情報発令中は「津波情報」の表示になる。 */
 export function renderNormalTitle(deps: NormalTitleDeps){
   const {
     context,
@@ -19,10 +20,8 @@ export function renderNormalTitle(deps: NormalTitleDeps){
     colorThemeMode,
     mscale,
     fontSans,
-    normalItems,
-    directTexts,
-    viewingTextIndex,
-    textCount,
+    currentTitle,
+    nextTitle,
     t_viewType,
     t_Cancelled
   } = deps;
@@ -35,32 +34,19 @@ export function renderNormalTitle(deps: NormalTitleDeps){
   context.clip();
   context.fillStyle = colorScheme[colorThemeMode][1][mscale];
   context.fillRect(0, 0, 1080, 60);
-  if (!(t_viewType === 2 && !t_Cancelled)){
-    context.font = "28px " + fontSans;
-    const titleAt = (offset: number) => normalItems[(viewingTextIndex + offset) % textCount]?.title ?? directTexts[5 + (viewingTextIndex + offset) % textCount];
-    switch (textCount){
-      case 5:
-        context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-        context.fillText(titleAt(4), 895, 50, 185);
-      case 4:
-        context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-        context.fillText(titleAt(3), 685, 50, 185);
-      case 3:
-        context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-        context.fillText(titleAt(2), 475, 50, 185);
-      case 2:
-        context.fillStyle = mscale===1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
-        context.fillText(titleAt(1), 265, 50, 185);
-        break;
-    }
-  }
+
   context.fillStyle = colorScheme[colorThemeMode][3][mscale];
   context.font = "45px " + fontSans;
   if (t_viewType === 2 && !t_Cancelled){
+    // 津波情報発令中なら津波情報と表示
     context.fillText("津波情報", 450, 47, 250);
   } else {
-    const currentTitle = normalItems[viewingTextIndex]?.title ?? directTexts[5 + viewingTextIndex];
-    context.fillText(currentTitle, 10, 47, 250);
+    // Title を描画
+    context.fillText(currentTitle, 10, 47, 600);
+    // Next title を描画
+    context.font = "24px " + fontSans;
+    context.fillStyle = mscale === 1 ? colorScheme[colorThemeMode][4][0] : colorScheme[colorThemeMode][4][1];
+    context.fillText(nextTitle, 690, 50, 340);
   }
   context.restore();
 }

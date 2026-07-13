@@ -40,7 +40,7 @@
     <button class="switch-button" style="margin-left: 12px;">通常</button>
     <button class="switch-button">EEW</button>
     <button class="switch-button">地震情報</button>
-    <button class="switch-button">ニュース速報</button>
+    <button class="switch-button">気象速報</button>
     <button class="switch-button">ｿﾗﾎﾞﾀﾝ ｱﾝｹｰﾄ</button>
     <button class="switch-button">音楽再生 (需要…?)</button>
     <button class="switch-button">トラフィックモニター</button>
@@ -67,24 +67,17 @@
             <td><input type="checkbox" id="viewLittleTsunami" checked disabled></td>
           </tr></tbody>
         </table>
-        <hidden style="display: none;">自動更新URL: <input type="text" id="NormalMes" value="default_message.json"><input type="checkbox" id="isNormalMes" value="自動更新有効/無効"></hidden>
-        <table class="regular-table-0"><tbody>
-          <tr><td>1.</td><td>タイトル</td><td><input type="text" id="title1" class="normal-title" value="最高気温(℃)"></td><td>本文</td><td><input type="text" id="message1" class="normal-text" value="&lt;weather/temperature/high&gt;"></td><!--<td><input type="radio" name="scrollfix" value="1"></td>--></tr>
-          <tr><td>2.</td><td>タイトル</td><td><input type="text" id="title2" class="normal-title" value="最低気温(℃)"></td><td>本文</td><td><input type="text" id="message2" class="normal-text" value="&lt;weather/temperature/low&gt;"></td><!--<td><input type="radio" name="scrollfix" value="1"></td>--></tr>
-          <tr><td>3.</td><td>タイトル</td><td><input type="text" id="title3" class="normal-title" value="時降水量(mm/h)"></td><td>本文</td><td><input type="text" id="message3" class="normal-text" value="&lt;weather/rain/1h&gt;"></td><!--<td><input type="radio" name="scrollfix" value="1"></td>--></tr>
-          <tr><td>4.</td><td>タイトル</td><td><input type="text" id="title4" class="normal-title" value="日降水量(mm/d)"></td><td>本文</td><td><input type="text" id="message4" class="normal-text" value="&lt;weather/rain/24h&gt;"></td><!--<td><input type="radio" name="scrollfix" value="1"></td>--></tr>
-          <tr><td>5.</td><td>タイトル</td><td><input type="text" id="title5" class="normal-title" value="最大風速(m/s)"></td><td>本文</td><td><input type="text" id="message5" class="normal-text" value="&lt;weather/wind&gt;"></td><!--<td><input type="radio" name="scrollfix" value="1"></td>--></tr>
-        </tbody></table>
-        <button type="button" name="goMessage">入力された内容を反映して通常画面に復帰する（ニュース速報はリセットされる）</button>
+        <!-- 通常テキスト入力欄 -->
+        <div id="normalText.textList" class="normal-text-block" style="z-index:20;">
+          <div class="nt-toolbar">
+            <div class="nt-toolbar-left" style="display:flex; gap:6px;">
+              <button type="button" id="normalText.addText" class="btn tiny">＋ 追加</button>
+            </div>
+          </div>
+          <div class="nt-cards" id="normalTextsCards" aria-label="通常テキスト一覧"></div>
+        </div>
         <button type="button" name="skipMessage">現在の表示項目をスキップ</button>
         <!-- <input type="radio" name="scrollfix" value="0"> -->
-        <div>
-          <h3>コマンド機能とは？</h3>
-          <div>
-            <p>通常画面の「本文」にはスクロールさせたい文章を入力できますが、そこに「&lt;weather/temperature/current&gt;」などの「コマンド」を入力すると、コマンドに対応した機能を使って文章を出力することができます。</p>
-            <p><a href="./disp-commands.html" target="_blank" rel="noopener noreferrer">標準コマンド一覧表</a><br></p>
-          </div>
-        </div>
       </div>
       <div class="tab-item opt-hide">
         <h2>緊急地震速報<span id="eewTime">--:--:--</span></h2>
@@ -128,12 +121,27 @@
         </div>
       </div>
       <div class="tab-item opt-hide">
-        <h2>ニュース速報</h2>
-        タイトル　　：<input type="text" id="BNtitle" style="width:300px;"><br>
-        サブタイトル：<input type="text" id="BNtext1" style="width:700px;"><br>
-        テキスト　　：<input type="text" id="BNtext2" style="width:700px;"><br>
-        <input type="button" name="BreakingNewsView" value="反映"><br>
-        <button type="button" name="wtWarnListView">待機中の気象情報を確認</button>
+        <h2>気象速報</h2>
+        <div style="display: flex; flex-direction: row; gap: 25px; margin: 0 10px;">
+          <div>気象警報・注意報量の制限</div>
+          <div>
+            <div>
+              <input type="checkbox" id="weatherWarn.control.ignoreAdvisory">
+              <label for="weatherWarn.control.ignoreAdvisory">常に注意報の発表・解除を非表示</label>
+            </div>
+            <div>
+              <input type="checkbox" id="weatherWarn.control.ignoreWarning">
+              <label for="weatherWarn.control.ignoreWarning">常に警報以下の発表・解除を非表示</label>
+            </div>
+          </div>
+        </div>
+        <div style="margin: 10px 6px;">
+          タイトル　　：<input type="text" id="BNtitle" style="width:300px;"><br>
+          サブタイトル：<input type="text" id="BNtext1" style="width:700px;"><br>
+          テキスト　　：<input type="text" id="BNtext2" style="width:700px;"><br>
+          <button type="button" id="weatherWarn.manualAdd">追加</button>
+        </div>
+        <button type="button" id="weatherWarn.clearAll">すべての気象情報をクリア</button>
         <div class="wtWarnChecking">
           <div class="wtWarnListMsg">表示待機中の気象情報はありません</div>
           <div class="wtWarnListFeeds">
@@ -169,6 +177,10 @@
       </div>
       <div class="tab-item opt-hide">
         <h2>読み上げ</h2>
+        <select id="speech-enabled" class="speech-item" style="padding: 2px 5px;">
+          <option value="1">読み上げは有効です。</option>
+          <option value="0">読み上げは無効になっています。</option>
+        </select>
         <div class="speech-item">
           <div>読み上げステータス情報</div>
           <div id="speech-status-current"></div>
@@ -185,9 +197,8 @@
           <div>
             <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-eew" checked><span>: 緊急地震速報</span></label></div>
             <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-quake" checked><span>: 地震情報（調整中）</span></label></div>
-            <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-vpoa50" checked><span>: 記録的短時間大雨情報</span></label></div>
-            <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-ground" checked><span>: 土砂災害警戒情報</span></label></div>
-            <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-specialwarn" checked><span>: 特別警報報知</span></label></div>
+            <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-vpoa50" checked><span>: 気象防災速報（記録的短時間大雨）</span></label></div>
+            <div class="speech-effective"><label><input type="checkbox" id="speech-checkbox-specialwarn" checked><span>: 各種気象特別警報</span></label></div>
           </div>
         </div>
         <div><button id="speech-test1">テスト音声を再生</button></div>
@@ -607,13 +618,13 @@
                     <li>緊急地震速報(ビープ音)：<input type="number" min="0" max="200" value="10" id="volEEWh">%<button id="voltestEEWh">テスト(3秒)</button></li>
                     <li>緊急地震速報(カスタム)：<input type="number" min="0" max="200" value="100" id="volEEWc">%<button id="voltestEEWcustom">テスト</button></li>
                     <li>緊急地震速報(PLUM法)<a target="_blank" href="https://www.data.jma.go.jp/svd/eew/data/nc/shiryo/setsumeikai170712/170712_3c.pdf"><sup>[?]</sup></a>：<input type="number" min="0" max="200" value="100" id="volEEWp">%<button id="voltestEEWp">テスト</button></li>
-                    <li>土砂災害警戒情報：<input type="number" min="0" max="200" value="100" id="volGL">%<button id="voltestGL">テスト</button></li>
-                    <li>竜巻注意情報：<input type="number" min="0" max="200" value="100" id="volNtc">%<button id="voltestNtc">テスト</button></li>
+                    <li>気象危険警報：<input type="number" min="0" max="200" value="100" id="volUrgW">%<button id="voltestUrgW">テスト</button></li>
                     <li>気象特別警報：<input type="number" min="0" max="200" value="100" id="volSpW">%<button id="voltestSpW">テスト</button></li>
+                    <li>氾濫危険警報：<input type="number" min="0" max="200" value="100" id="volFldOc4">%<button id="voltestFldOc4">テスト</button></li>
+                    <li>氾濫特別警報：<input type="number" min="0" max="200" value="100" id="volFldOc5">%<button id="voltestFldOc5">テスト</button></li>
+                    <li>竜巻注意情報：<input type="number" min="0" max="200" value="100" id="volNtc">%<button id="voltestNtc">テスト</button></li>
+                    <li>記録的短時間大雨：<input type="number" min="0" max="200" value="100" id="volHvRa">%<button id="voltestHvRa">テスト</button></li>
                     <li>津波情報：<input type="number" min="0" max="200" value="100" id="volTnm">%<button id="voltestTnm">テスト</button></li>
-                    <li>記録的短時間大雨情報：<input type="number" min="0" max="200" value="100" id="volHvRa">%<button id="voltestHvRa">テスト</button></li>
-                    <li>氾濫危険情報：<input type="number" min="0" max="200" value="100" id="volFldOc4">%<button id="voltestFldOc4">テスト</button></li>
-                    <li>氾濫発生情報：<input type="number" min="0" max="200" value="100" id="volFldOc5">%<button id="voltestFldOc5">テスト</button></li>
                   </ul>
                 </li>
                 <li>緊急地震速報警報時の音声をカスタマイズするには？<div style="width: 550px;">
@@ -687,7 +698,7 @@
             <div class="eiListCover" id="eiListCover">読み込み待機中・・・<br>Tips: 点滅→表示中の情報</div>
           </div>
           <div>
-            <div class="eiTitle" aria-label="地震情報のタイトル" id="eiTitle"></div>
+            <!-- <div class="eiTitle" aria-label="地震情報のタイトル" id="eiTitle"></div> -->
             <div class="eiwind" aria-label="地震情報の本文" id="eiwind">（情報が選択されていません）</div>
           </div>
         </div>

@@ -1,6 +1,12 @@
 export interface NormalText {
   title: string;
   text: string;
+  /** 表示の有効・無効 */
+  enabled: boolean;
+  /** custom: text をそのまま表示 / shortcut: shortcutId のコマンド出力を表示 */
+  type: "custom" | "shortcut";
+  /** type が shortcut のときのコマンド ID（例: "weather/temperature/high"） */
+  shortcutId: string | null;
 }
 
 export interface NewsText {
@@ -45,6 +51,8 @@ export interface AppConfig {
       }
 
       sfx: {
+        /** マスター音量（0-1） */
+        master: number;
         eewBegin: number;
         eewContinue: number;
         eewEnd: number;
@@ -53,23 +61,36 @@ export interface AppConfig {
         eewPlum: number;
         floodLevel4: number;
         floodLevel5: number;
-        doshakeikai: number;
+        /** 気象危険警報（レベル４）の音量。旧 doshakeikai（土砂災害警戒情報）の後継 */
+        urgentWarning: number;
         kirokuame: number;
         nornadoNotice: number;
         level5Warning: number;
         tsunamiWarning: number;
         quake: [number, number, number, number, number, number, number, number, number];
+        /** 震度別の地震情報音の種類 */
+        quakeTypes: ("normal" | "major")[];
       },
       speech: {
+        /** 読み上げ全体の有効・無効 */
+        enabled: boolean;
         options: {
           eew: boolean;
-          doshakeikai: boolean;
           quake: boolean;
           level5Warning: boolean;
           kirokuame: boolean;
         }
         volume: number;
       },
+      /** 気象警報・注意報の表示量制限 */
+      weatherWarn: {
+        ignore: {
+          advisory: boolean;
+          warning: boolean;
+        }
+      },
+      /** 記録的短時間大雨情報の読み上げを地点単位に分割するかどうか */
+      partiallyReadingAme: boolean;
       soraViewEnabled?: boolean;
       gainPrograms?: GainProgram[];
     }
@@ -78,15 +99,22 @@ export interface AppConfig {
 
 const createEmptyNormalText = (): NormalText => ({
   title: "",
-  text: ""
+  text: "",
+  enabled: true,
+  type: "custom",
+  shortcutId: null
 });
 
 const cloneDefaultConfig = (): AppConfig["config"] => JSON.parse(JSON.stringify(defaultAppConfig.config));
 const cloneDefaultAppConfig = (): AppConfig => JSON.parse(JSON.stringify(defaultAppConfig));
 
-const ensureNormalTexts = (texts?: NormalText[]): NormalText[] => {
+const ensureNormalTexts = (texts?: Partial<NormalText>[]): NormalText[] => {
   const normalized = texts ?? [];
-  return Array.from({ length: 5 }, (_, index) => normalized[index] ?? createEmptyNormalText());
+  // 旧形式（enabled などがない）の項目も既定値で補って読み込めるようにする
+  return normalized.map(item => ({
+    ...createEmptyNormalText(),
+    ...item
+  }));
 };
 
 const mergeConfig = (stored?: AppConfig["config"]): AppConfig["config"] => {
@@ -117,15 +145,27 @@ const mergeConfig = (stored?: AppConfig["config"]): AppConfig["config"] => {
       },
       sfx: {
         ...base.ticker.sfx,
-        ...(stored.ticker?.sfx ?? {})
+        ...(stored.ticker?.sfx ?? {}),
+        // 旧設定（土砂災害警戒情報 doshakeikai）の音量を気象危険警報へ引き継ぐ
+        urgentWarning: stored.ticker?.sfx?.urgentWarning
+          ?? (stored.ticker?.sfx as { doshakeikai?: number } | undefined)?.doshakeikai
+          ?? base.ticker.sfx.urgentWarning
       },
       speech: {
+        enabled: stored.ticker?.speech?.enabled ?? base.ticker.speech.enabled,
         options: {
           ...base.ticker.speech.options,
           ...(stored.ticker?.speech?.options ?? {})
         },
         volume: stored.ticker?.speech?.volume ?? base.ticker.speech.volume
       },
+      weatherWarn: {
+        ignore: {
+          ...base.ticker.weatherWarn.ignore,
+          ...(stored.ticker?.weatherWarn?.ignore ?? {})
+        }
+      },
+      partiallyReadingAme: stored.ticker?.partiallyReadingAme ?? base.ticker.partiallyReadingAme,
       soraViewEnabled: stored.ticker?.soraViewEnabled ?? base.ticker.soraViewEnabled,
       gainPrograms: stored.ticker?.gainPrograms ?? base.ticker.gainPrograms
     }
@@ -155,18 +195,34 @@ const defaultAppConfig: AppConfig = {
       }
     },
     ticker: {
-      normalTexts: Array.from({ length: 5 }, createEmptyNormalText),
+      normalTexts: [
+        {
+          title: "お知らせ",
+          text: "NDV ティッカーをご利用いただきありがとうございます。",
+          enabled: true,
+          type: "custom",
+          shortcutId: null
+        },
+        {
+          title: "最高気温（℃）",
+          text: "",
+          enabled: true,
+          type: "shortcut",
+          shortcutId: "weather/temperature/high"
+        }
+      ],
       newsText: {
         title: "",
         subtitle: "",
         text: ""
       },
-      scrollSpeed: 5,
+      scrollSpeed: 4,
       tsunamiPosition: "top",
       themeColor: {
         ticker: 0
       },
       sfx: {
+        master: 1,
         eewBegin: 100,
         eewContinue: 100,
         eewEnd: 100,
@@ -175,23 +231,31 @@ const defaultAppConfig: AppConfig = {
         eewPlum: 100,
         floodLevel4: 100,
         floodLevel5: 100,
-        doshakeikai: 100,
+        urgentWarning: 100,
         kirokuame: 100,
         nornadoNotice: 100,
         level5Warning: 100,
         tsunamiWarning: 100,
-        quake: [100, 100, 100, 100, 100, 100, 100, 100, 100]
+        quake: [100, 100, 100, 100, 100, 100, 100, 100, 100],
+        quakeTypes: []
       },
       speech: {
+        enabled: true,
         options: {
           eew: true,
-          doshakeikai: true,
           quake: true,
           level5Warning: true,
           kirokuame: true
         },
         volume: 1
       },
+      weatherWarn: {
+        ignore: {
+          advisory: false,
+          warning: false
+        }
+      },
+      partiallyReadingAme: true,
       soraViewEnabled: false,
       gainPrograms: []
     }

@@ -106,9 +106,9 @@ export function renderEewView(deps: EewRenderDeps): { shouldExit: boolean } {
   } else if (eewWarnTextList.length){
     context.fillStyle = "#ffea00";
     context.font = "500 25px " + fontSans;
-    const topWarnText = eewWarnTextList[Math.floor((qStartTime / 300) % eewWarnTextList.length)];
-    context.fillText(topWarnText.ja[Math.floor(((qStartTime % 300) / 300) * topWarnText.ja.length)], 337, 26, 553);
-    context.fillText(topWarnText.en[Math.floor(((qStartTime % 300) / 300) * topWarnText.en.length)], 337, 53, 553);
+    const topWarnText = eewWarnTextList[Math.floor((qStartTime / 360) % eewWarnTextList.length)];
+    context.fillText(topWarnText.ja[Math.floor(((qStartTime % 360) / 360) * topWarnText.ja.length)], 337, 26, 553);
+    context.fillText(topWarnText.en[Math.floor(((qStartTime % 360) / 360) * topWarnText.en.length)], 337, 53, 553);
   }
 
   let shouldExit = false;
@@ -120,7 +120,7 @@ export function renderEewView(deps: EewRenderDeps): { shouldExit: boolean } {
     context.fillStyle = "#d00";
     context.strokeStyle = "#fff";
     context.lineWidth = 2;
-    context.globalAlpha = 1 - (qStartTime % 60) / 78;
+    context.globalAlpha = 1 - (qStartTime % 72) / 78;
     context.beginPath();
     context.moveTo(eewEpiPos[0]- 6, eewEpiPos[1]-10);
     context.lineTo(eewEpiPos[0]-10, eewEpiPos[1]- 6);
@@ -141,10 +141,10 @@ export function renderEewView(deps: EewRenderDeps): { shouldExit: boolean } {
     context.globalAlpha = 1;
   } else {
     context.fillStyle = "#d00";
-    const t1 = (qStartTime % 60) / 68;
-    const t2 = ((qStartTime + 15) % 60) / 68;
-    const t3 = ((qStartTime + 30) % 60) / 68;
-    const t4 = ((qStartTime + 45) % 60) / 68;
+    const t1 = (qStartTime % 72) / 68;
+    const t2 = ((qStartTime + 18) % 72) / 68;
+    const t3 = ((qStartTime + 36) % 72) / 68;
+    const t4 = ((qStartTime + 54) % 72) / 68;
     context.globalAlpha = 0.5 - t1/2;
     context.beginPath();
     context.arc(eewEpiPos[0], eewEpiPos[1], t1*28.284271, 0, 2*Math.PI);

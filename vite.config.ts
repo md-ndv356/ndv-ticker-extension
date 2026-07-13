@@ -32,10 +32,9 @@ const manifest = defineManifest({
       "https://weathernews.jp/river/json/river.json",
       "https://weathernews.jp/v/sorawolive/data/json/solive_sorabtn.json",
       "https://site.weathernews.jp/site/lalert/json/evac.json",
-      "http://www.data.jma.go.jp/developer/xml/feed/extra.xml",
-      "http://www.data.jma.go.jp/developer/xml/data/*",
+      "https://www.data.jma.go.jp/developer/xml/feed/extra.xml",
+      "https://www.data.jma.go.jp/developer/xml/data/*",
       "https://www.data.jma.go.jp/obd/stats/data/mdrr/*",
-      "https://www.nhk.or.jp/weather-data/v1/wx/quake/info/?akey=18cce8ec1fb2982a4e11dd6b1b3efa36",
       "https://www.jma.go.jp/bosai/quake/data/list.json?*",
       "https://www.jma.go.jp/bosai/quake/data/*",
       "https://www.jma.go.jp/bosai/tsunami/data/list.json?*",
@@ -99,7 +98,8 @@ export default defineConfig({
         background: "src/background/index.ts",
         popup: "src/popup/index.html",
         // sandbox: "src/popup/sandbox.html",
-        "disp-commands": "src/disp-commands/index.html"
+        "disp-commands": "src/disp-commands/index.html",
+        "updateNotice": "src/updateNotice/index.html"
       }
       // output: {
       //   entryFileNames: `src/[name].js`,

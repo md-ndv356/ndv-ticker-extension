@@ -3,7 +3,7 @@ export type LoadFontsDeps = {
   routines: {
     md0title: () => void;
     md3title: () => void;
-    memory: { lastTime: number };
+    memory: { lastDisplayTime: number };
   };
 };
 
@@ -59,7 +59,7 @@ export function loadFonts({ getViewMode, routines }: LoadFontsDeps){
       const viewMode = getViewMode();
       if (viewMode === 0) routines.md0title();
       if (viewMode === 3) routines.md3title();
-      routines.memory.lastTime = 0;
+      routines.memory.lastDisplayTime = 0;
     }
   };
 

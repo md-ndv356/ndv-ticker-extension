@@ -33,37 +33,43 @@ type WarningReportDetail = {
 
 type WarningReportListener = (text: string) => void;
 
-export const WarnCodes: Record<string, { name1: string; name2: string; elem: string; level: number }> = {
-  "33": { name1: "大雨", name2: "特別警報", elem: "rain", level: 50 },
-  "03": { name1: "大雨", name2: "警報", elem: "rain", level: 30 },
-  "10": { name1: "大雨", name2: "注意報", elem: "rain", level: 20 },
-  "04": { name1: "洪水", name2: "警報", elem: "flood", level: 30 },
-  "18": { name1: "洪水", name2: "注意報", elem: "flood", level: 20 },
-  "35": { name1: "暴風", name2: "特別警報", elem: "wind", level: 40 },
-  "05": { name1: "暴風", name2: "警報", elem: "wind", level: 30 },
-  "15": { name1: "強風", name2: "注意報", elem: "wind", level: 20 },
-  "32": { name1: "暴風雪", name2: "特別警報", elem: "wind_snow", level: 40 },
-  "02": { name1: "暴風雪", name2: "警報", elem: "wind_snow", level: 30 },
-  "13": { name1: "風雪", name2: "注意報", elem: "wind_snow", level: 20 },
-  "36": { name1: "大雪", name2: "特別警報", elem: "snow", level: 40 },
-  "06": { name1: "大雪", name2: "警報", elem: "snow", level: 30 },
-  "12": { name1: "大雪", name2: "注意報", elem: "snow", level: 20 },
-  "37": { name1: "波浪", name2: "特別警報", elem: "wave", level: 40 },
-  "07": { name1: "波浪", name2: "警報", elem: "wave", level: 30 },
-  "16": { name1: "波浪", name2: "注意報", elem: "wave", level: 20 },
-  "38": { name1: "高潮", name2: "特別警報", elem: "tide", level: 40 },
-  "08": { name1: "高潮", name2: "警報", elem: "tide", level: 40 },
-  "19": { name1: "高潮", name2: "注意報", elem: "tide", level: 20 },
-  "19+": { name1: "高潮", name2: "注意報", elem: "tide", level: 30 },
-  "14": { name1: "雷", name2: "注意報", elem: "thunder", level: 20 },
-  "17": { name1: "融雪", name2: "注意報", elem: "snow_melting", level: 20 },
-  "20": { name1: "濃霧", name2: "注意報", elem: "fog", level: 20 },
-  "21": { name1: "乾燥", name2: "注意報", elem: "dry", level: 20 },
-  "22": { name1: "なだれ", name2: "注意報", elem: "avalanche", level: 20 },
-  "23": { name1: "低温", name2: "注意報", elem: "cold", level: 20 },
-  "24": { name1: "霜", name2: "注意報", elem: "frost", level: 20 },
-  "25": { name1: "着氷", name2: "注意報", elem: "ice_accretion", level: 20 },
-  "26": { name1: "着雪", name2: "注意報", elem: "snow_accretion", level: 20 },
+// Source: 気象庁ホームページ（レベル表記を含む新しい警報・注意報コード表）
+export const warnCodesNew: Record<string, { shortNameParts: string[]; nameParts: string[]; elem: string; level: number }> = {
+  "10": { shortNameParts: ["レベル２"], nameParts: ["レベル２", "大雨", "注意報"], elem: "rain", level: 20 },
+  "12": { shortNameParts: ["注"], nameParts: ["大雪", "注意報"], elem: "snow", level: 20 },
+  "13": { shortNameParts: ["注"], nameParts: ["風雪", "注意報"], elem: "wind_snow", level: 20 },
+  "14": { shortNameParts: ["注"], nameParts: ["雷", "注意報"], elem: "thunder", level: 20 },
+  "15": { shortNameParts: ["注"], nameParts: ["強風", "注意報"], elem: "wind", level: 20 },
+  "16": { shortNameParts: ["注"], nameParts: ["波浪", "注意報"], elem: "wave", level: 20 },
+  "17": { shortNameParts: ["注"], nameParts: ["融雪", "注意報"], elem: "snow_melting", level: 20 },
+  "18": { shortNameParts: ["注"], nameParts: ["洪水", "注意報"], elem: "flood", level: 20 },
+  "19": { shortNameParts: ["レベル２"], nameParts: ["レベル２", "高潮", "注意報"], elem: "tide", level: 20 },
+  "20": { shortNameParts: ["注"], nameParts: ["濃霧", "注意報"], elem: "fog", level: 20 },
+  "21": { shortNameParts: ["注"], nameParts: ["乾燥", "注意報"], elem: "dry", level: 20 },
+  "22": { shortNameParts: ["注"], nameParts: ["なだれ", "注意報"], elem: "avalanche", level: 20 },
+  "23": { shortNameParts: ["注"], nameParts: ["低温", "注意報"], elem: "cold", level: 20 },
+  "24": { shortNameParts: ["注"], nameParts: ["霜", "注意報"], elem: "frost", level: 20 },
+  "25": { shortNameParts: ["注"], nameParts: ["着氷", "注意報"], elem: "ice_accretion", level: 20 },
+  "26": { shortNameParts: ["注"], nameParts: ["着雪", "注意報"], elem: "snow_accretion", level: 20 },
+  "29": { shortNameParts: ["レベル２"], nameParts: ["レベル２", "土砂災害", "注意報"], elem: "landslide", level: 20 },
+  "32": { shortNameParts: ["特"], nameParts: ["暴風雪", "特別警報"], elem: "wind_snow", level: 50 },
+  "33": { shortNameParts: ["レベル５"], nameParts: ["レベル５", "大雨", "特別警報"], elem: "rain", level: 50 },
+  "35": { shortNameParts: ["特"], nameParts: ["暴風", "特別警報"], elem: "wind", level: 50 },
+  "36": { shortNameParts: ["特"], nameParts: ["大雪", "特別警報"], elem: "snow", level: 50 },
+  "37": { shortNameParts: ["特"], nameParts: ["波浪", "特別警報"], elem: "wave", level: 50 },
+  "38": { shortNameParts: ["レベル５"], nameParts: ["レベル５", "高潮", "特別警報"], elem: "tide", level: 50 },
+  "39": { shortNameParts: ["レベル５"], nameParts: ["レベル５", "土砂災害", "特別警報"], elem: "landslide", level: 50 },
+  "43": { shortNameParts: ["レベル４"], nameParts: ["レベル４", "大雨", "危険警報"], elem: "rain", level: 40 },
+  "48": { shortNameParts: ["レベル４"], nameParts: ["レベル４", "高潮", "危険警報"], elem: "tide", level: 40 },
+  "49": { shortNameParts: ["レベル４"], nameParts: ["レベル４", "土砂災害", "危険警報"], elem: "landslide", level: 40 },
+  "03": { shortNameParts: ["レベル３"], nameParts: ["レベル３", "大雨", "警報"], elem: "rain", level: 30 },
+  "09": { shortNameParts: ["レベル３"], nameParts: ["レベル３", "土砂災害", "警報"], elem: "landslide", level: 30 },
+  "08": { shortNameParts: ["レベル３"], nameParts: ["レベル３", "高潮", "警報"], elem: "tide", level: 30 },
+  "05": { shortNameParts: ["警"], nameParts: ["暴風", "警報"], elem: "wind", level: 30 },
+  "02": { shortNameParts: ["警"], nameParts: ["暴風雪", "警報"], elem: "wind_snow", level: 30 },
+  "06": { shortNameParts: ["警"], nameParts: ["大雪", "警報"], elem: "snow", level: 30 },
+  "04": { shortNameParts: ["警"], nameParts: ["洪水", "警報"], elem: "flood", level: 30 },
+  "07": { shortNameParts: ["警"], nameParts: ["波浪", "警報"], elem: "wave", level: 30 }
 };
 
 export class WarnCurrentOperator extends EventTarget {
@@ -108,12 +114,12 @@ export class WarnCurrentOperator extends EventTarget {
       for (const item of WarnData){
         for (const area of item.areaTypes[0].areas){
           if (area.warnings[0].status === "発表警報・注意報はなし") continue;
+
           const warnings = area.warnings.filter(item => {
-            if (item.code === "19" && item.nextKinds) item.code = "19+";
             return item.status !== "解除";
           }).map(item => {
-            const warn = WarnCodes[item.code];
-            return warn.name1 + warn.name2;
+            const warn = warnCodesNew[item.code];
+            return warn.nameParts.join("");
           }).join("・");
           if (!warnings) continue;
 

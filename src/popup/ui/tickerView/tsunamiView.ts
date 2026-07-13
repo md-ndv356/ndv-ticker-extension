@@ -65,14 +65,15 @@ export function renderTsunamiOverlay(params: {
   context.fillStyle = "#b33122";
   context.fillRect(265, 0, 815, 60);
   context.font = "500 30px " + fontSans;
-  context.fillStyle = "#fff";
-  context.fillText("津波情報", 275, 33, 800);
-  context.strokeStyle = "#fff";
+  context.fillStyle = "#ddd";
+  context.fillText("津波予報", 275, 33, 800);
+  context.strokeStyle = "#999";
   context.lineWidth = 3;
   context.beginPath();
   context.moveTo(385, 55);
   context.lineTo(435, 5);
   context.stroke();
+  context.fillStyle = "#fff";
 
   const currentText = texts[page] ?? "";
   context.fillText(currentText, 420, 53, 610);
@@ -83,6 +84,7 @@ export function renderTsunamiOverlay(params: {
   context.moveTo(1045, 25);
   context.lineTo(1075, 25);
   context.stroke();
+  context.fillStyle = "#aaa";
   context.fillText((page + 1) + "", 1060, 21);
   context.fillText(texts.length + "", 1060, 43);
   context.textAlign = "start";

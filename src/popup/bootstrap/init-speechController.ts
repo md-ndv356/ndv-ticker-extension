@@ -26,7 +26,9 @@ export class AudioSpeechController extends EventTarget {
   #bufferSource: AudioBufferSourceNode | null = null;
   #wholeGain: GainNode | null = null;
   #sourceGain: GainNode | null = null;
+  #enabled = true;
   #paused = true;
+
   #speakers: AudioSpeaker[] = [];
   #urls = {
     common: {
@@ -57,14 +59,12 @@ export class AudioSpeechController extends EventTarget {
       int_dist: "quake/int-dist.wav",
       end: "quake/int-dist-end.wav"
     },
-    ground: {
-      area: Object.fromEntries(Object.keys(AreaForecastLocalM.ground).map(item => [item, "ground/area/" + item + ".wav"])),
-      clear: "ground/clear.wav",
-      issue: "ground/issue.wav"
-    },
     warning: {
       prefecture: Object.fromEntries(Object.keys(AreaForecastLocalM.warning).map(item => [item, "warning/prefecture/" + item + ".wav"])),
-      special_warn: "warning/special_warn.wav"
+      flood: "warning/flood.wav",
+      landslide: "warning/landslide.wav",
+      rainfall: "warning/rainfall.wav",
+      stormsurge: "warning/stormsurge.wav"
     },
     VPOA50_issued: "VPOA50_issued.wav"
   };
@@ -166,11 +166,29 @@ export class AudioSpeechController extends EventTarget {
   }
 
   /**
-   * キューに登録し、読み上げを開始する
+   * 読み上げの有効／無効。無効にした場合、キューに残っている読み上げは全てキャンセルされます。
+   * @param {Boolean} bool
+   */
+  set enabled (bool: boolean){
+    if (bool){
+      this.#enabled = true;
+    } else {
+      this.#enabled = false;
+      this.allCancel();
+    }
+  }
+  get enabled (){
+    return this.#enabled;
+  }
+
+  /**
+   * キューに登録し、読み上げを開始します。
    * @param {AudioSpeechQueueParam[]} speechData 読み上げデータ
    */
   async start (speechData: AudioSpeechQueueParam[] = []){
     if (!this.isInitializing) return;
+    if (!this.enabled) return;
+
     this.#argumentValidation(speechData, Array, "start");
     for (let i=0; i<speechData.length; i++){
       const item = speechData[i];
@@ -324,10 +342,18 @@ export class AudioSpeechController extends EventTarget {
     try {
       for (const speaker of this.#speakers){
         if (speaker.isAvaliable){
-          const zipArrayBuffer = await new Promise<ArrayBuffer>((resolve) => {
+          const zipArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
             const xhr: XMLHttpRequest & { requestFileName?: string } = new XMLHttpRequest();
             xhr.addEventListener("load", () => {
               resolve(xhr.response);
+            });
+            xhr.addEventListener("error", () => {
+              this.#speechStatusEvent(this.speechStatus.INIT_FAILED, new Error("音声ファイル " + xhr.requestFileName + " の読み込みに失敗しました。"));
+              reject(new Error("Failed to load audio file: " + xhr.requestFileName));
+            });
+            xhr.addEventListener("abort", () => {
+              this.#speechStatusEvent(this.speechStatus.INIT_FAILED, new Error("音声ファイル " + xhr.requestFileName + " の読み込みが中断されました。"));
+              reject(new Error("Aborted to load audio file: " + xhr.requestFileName));
             });
             xhr.addEventListener("progress", event => {
               if (event.lengthComputable){

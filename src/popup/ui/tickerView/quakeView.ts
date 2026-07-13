@@ -12,13 +12,13 @@ export const quakeRenderState: QuakeMutable = {
   language: "Ja"
 };
 
-export function resetQuakeTelop(mutable: QuakeMutable, isPreliminary: boolean){
-  mutable.earthquake_telop_times = isPreliminary ? -1027 : 0;
+export function resetQuakeTelop(mutable: QuakeMutable, isSokuho: boolean){
+  mutable.earthquake_telop_times = isSokuho ? 0 : -5;
   mutable.earthquake_telop_remaining = 1500;
 }
 
-export function prepareQuakeState(mutable: QuakeMutable, isPreliminary = false){
-  resetQuakeTelop(mutable, isPreliminary);
+export function prepareQuakeState(mutable: QuakeMutable, isSokuho = false){
+  resetQuakeTelop(mutable, isSokuho);
   mutable.language = "Ja";
 }
 
@@ -36,9 +36,9 @@ export type QuakeRenderDeps = {
   q_currentShindo: number;
   q_maxShindo: number;
   q_magnitude: string;
-  isPreliminary: boolean;
+  isSokuho: boolean;
   q_timeAll: string;
-  timeCount: number;
+  uptimeCount: number;
   cnv_anim1: any;
   shindoListJP: string[];
   DrawTextureText: (text: string, x: number, y: number, opts: any, maxWidth?: number) => void;
@@ -63,9 +63,9 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
     q_currentShindo,
     q_maxShindo,
     q_magnitude,
-    isPreliminary,
+    isSokuho,
     q_timeAll,
-    timeCount,
+    uptimeCount,
     cnv_anim1,
     shindoListJP,
     DrawTextureText,
@@ -96,16 +96,22 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
     if (language === "Ja") context.drawImage(isMscale2 ? images.quake.texts.depth.ja2 : images.quake.texts.depth.ja, 917, 0);
     if (language === "En") context.drawImage(isMscale2 ? images.quake.texts.depth.en2 : images.quake.texts.depth.en, 917, 3);
   }
-  if (q_depth!="ごく浅い" && q_depth!="ごく浅く" && q_depth) context.drawImage(isMscale2 ? images.quake.texts.depth_km2 : images.quake.texts.depth_km, 1042, 28);
-  context.drawImage(isMscale2 ? images.quake.texts.magni2 : images.quake.texts.magni, 420, 25);
+  if (q_depth !== "ごく浅い" && q_depth !== "深い" && q_depth) context.drawImage(isMscale2 ? images.quake.texts.depth_km2 : images.quake.texts.depth_km, 1042, 28);
   context.font = "500 50px " + fontSans;
   context.fillStyle = isMscale2 ? "#333" : "#fff";
-  DrawTextureText(q_magnitude, 462, 45, {base:"HelveticaNeue-CondensedBold",px:50,weight:"bold",letterSpacing:0});
-  if (q_depth == "ごく浅い"){
+  if (q_magnitude){
+    context.drawImage(isMscale2 ? images.quake.texts.magni2 : images.quake.texts.magni, 420, 25);
+    DrawTextureText(q_magnitude, 462, 45, {base:"HelveticaNeue-CondensedBold",px:50,weight:"bold",letterSpacing:0});
+  }
+  if (q_depth === "ごく浅い"){
     context.font = "500 30px Inter, " + fontSans;
     if (language === "Ja") context.fillText("ごく浅い", 950, 53, 90);
     if (language === "En") context.fillText("shallow", 975, 53, 90)
-  } else {
+  } else if (q_depth === "深い"){
+    context.font = "500 30px Inter, " + fontSans;
+    if (language === "Ja") context.fillText("深い", 950, 53, 90);
+    if (language === "En") context.fillText("deep", 975, 53, 90);
+  } else if (q_depth){
     DrawTextureText(q_depth, 978, 48, {base:"HelveticaNeue-CondensedBold",px:50,weight:"bold",letterSpacing:0}, 60);
   }
   context.font = "500 30px " + fontSans;
@@ -114,7 +120,7 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
   context.drawImage(images.quake.texts.intensity[context.fillStyle][q_currentShindo], 10+dif, 60);
   context.font = "23px '7barSP'";
   context.fillText(q_timeAll, 595, 23);
-  context.fillStyle = (((timeCount%12)<5) && timeCount<216 && (timeCount%72)<60) ? "#e02222" : isPreliminary ? "#f2f241" : "#2229";
+  context.fillStyle = (((uptimeCount%12)<5) && uptimeCount<216 && (uptimeCount%72)<60) ? "#e02222" : isSokuho ? "#f2f241" : "#2229";
   context.fillRect(224, 1, 10, 58);
   context.fillStyle = colorScheme[colorThemeMode][0][mscale]+"99";
   context.beginPath();
@@ -137,13 +143,13 @@ export function renderQuakeView(deps: QuakeRenderDeps): { shouldReset: boolean }
   context.moveTo(200+dif, 123);
   context.lineTo(  4+dif, 123);
   context.stroke();
-  if (timeCount < 13){
+  if (uptimeCount < 13){
     context.fillStyle = "#fff5";
     context.beginPath();
-    context.moveTo((-(timeCount)*95)+1240, 0);
-    context.lineTo((-(timeCount)*95)+1270, 0);
-    context.lineTo((-(timeCount)*95)+1210, 127);
-    context.lineTo((-(timeCount)*95)+1180, 127);
+    context.moveTo((-(uptimeCount)*95)+1240, 0);
+    context.lineTo((-(uptimeCount)*95)+1270, 0);
+    context.lineTo((-(uptimeCount)*95)+1210, 127);
+    context.lineTo((-(uptimeCount)*95)+1180, 127);
     context.fill();
   }
   let shouldReset = false;
