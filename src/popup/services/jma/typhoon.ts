@@ -1,4 +1,4 @@
-import { TrafficTracker } from "../../ui/trafficTracker.ts";
+import { TrafficTracker } from "../../ui/traffic-tracker.ts";
 import { zen2han } from "./common.ts";
 
 export type TyphReportListItem = {

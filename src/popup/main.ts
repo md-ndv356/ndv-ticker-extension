@@ -1,21 +1,21 @@
 'use strict';
 
 import './bootstrap/prototype-extension.ts';
-import { RequestURL } from './config/requestURL.ts';
+import { RequestURL } from './config/request-url.ts';
 import { DataOperator } from './services/jma/index.ts';
-import { TrafficTracker } from "./ui/trafficTracker.ts";
-import { getRiverPoints } from './services/riverPoints.ts';
+import { TrafficTracker } from "./ui/traffic-tracker.ts";
+import { getRiverPoints } from './services/river-points.ts';
 import { multilingualQuake } from './dictionaries/multilingual-quake.ts';
 import { AreaForecastLocalM } from './dictionaries/AreaForecastLocalM.ts';
 import { epicenter_list } from './dictionaries/epicenter.ts';
 import { AreaForecastLocalE, AreaEpicenter2Code, JapanGeoJSON } from './dictionaries/japan.ts';
 import { AudioSpeechController, AudioSpeaker } from './bootstrap/init-speechController.ts';
 import type { AudioSpeechQueueParam } from './bootstrap/init-speechController.ts';
-import { renderQuakeView, quakeRenderState, prepareQuakeState } from './ui/tickerView/quakeView.ts';
-import { renderEewView } from './ui/tickerView/eewView.ts';
-import { renderNormalTitle } from './ui/tickerView/normalView.ts';
-import { NewsOperator, renderNewsView, renderNewsStandbyList, renderNewsTitle } from './ui/tickerView/newsView.ts';
-import { advanceTsunamiPage, createTsunamiOverlayState, renderTsunamiOverlay, setTsunamiCancelled, setTsunamiIssued, updateTsunamiList } from './ui/tickerView/tsunamiView.ts';
+import { renderQuakeView, quakeRenderState, prepareQuakeState } from './ui/view/quake.ts';
+import { renderEewView } from './ui/view/eew.ts';
+import { renderNormalTitle } from './ui/view/normal.ts';
+import { NewsOperator, renderNewsView, renderNewsStandbyList, renderNewsTitle } from './ui/view/news.ts';
+import { advanceTsunamiPage, createTsunamiOverlayState, renderTsunamiOverlay, setTsunamiCancelled, setTsunamiIssued, updateTsunamiList } from './ui/view/tsunami.ts';
 import { VariableAnimation } from './bootstrap/variable-animation.ts';
 import { calcMapZoom } from './bootstrap/init-wasm.ts';
 import { canvas1, context, time } from './bootstrap/init-canvas.ts';
@@ -1556,7 +1556,7 @@ fetch("https://md-ndv356.github.io/ndv-tickers/version-list.json?_=" + Date.now(
   const current = verlist.indexOf(AppVersionView);
   if (current > 0){
     chrome.windows.create({
-      url: chrome.runtime.getURL("src/updateNotice/index.html")+"?txt="+encodeURIComponent(data.extension.list[0].string)+"&app="+encodeURIComponent(AppVersionView)+"&new="+encodeURIComponent(data.extension.list[0].name)+"&url="+encodeURIComponent(data.extension.list[0].jumpto),
+      url: chrome.runtime.getURL("src/update-notice/index.html")+"?txt="+encodeURIComponent(data.extension.list[0].string)+"&app="+encodeURIComponent(AppVersionView)+"&new="+encodeURIComponent(data.extension.list[0].name)+"&url="+encodeURIComponent(data.extension.list[0].jumpto),
       type: "popup",
       height: 325,
       width: 492

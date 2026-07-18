@@ -1,4 +1,4 @@
-import { RequestURL } from "../config/requestURL.ts";
+import { RequestURL } from "../config/request-url.ts";
 import { createFetchClient, type PollHandle } from "./task-runtime.ts";
 
 const eiListElement = document.getElementById("eiList") as HTMLDivElement;

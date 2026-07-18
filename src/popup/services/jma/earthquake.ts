@@ -4,7 +4,7 @@ import type { VXSE51 } from "../../../types/jma-json/qt/report-vxse51.d.ts";
 import type { VXSE52 } from "../../../types/jma-json/qt/report-vxse52.d.ts";
 import type { VXSE53 } from "../../../types/jma-json/qt/report-vxse53.d.ts";
 import type { VXSE61 } from "../../../types/jma-json/qt/report-vxse61.d.ts";
-import { TrafficTracker } from "../../ui/trafficTracker.ts";
+import { TrafficTracker } from "../../ui/traffic-tracker.ts";
 import { epicenter_list } from "../../dictionaries/epicenter.ts";
 import { AdditionalComments } from "./common.ts";
 

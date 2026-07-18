@@ -1,4 +1,4 @@
-import { TrafficTracker } from "../../ui/trafficTracker.ts";
+import { TrafficTracker } from "../../ui/traffic-tracker.ts";
 
 export type AreaOperator = {
 	url: string;

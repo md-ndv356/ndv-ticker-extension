@@ -99,7 +99,7 @@ export default defineConfig({
         popup: "src/popup/index.html",
         // sandbox: "src/popup/sandbox.html",
         "disp-commands": "src/disp-commands/index.html",
-        "updateNotice": "src/updateNotice/index.html"
+        "update-notice": "src/update-notice/index.html"
       }
       // output: {
       //   entryFileNames: `src/[name].js`,
