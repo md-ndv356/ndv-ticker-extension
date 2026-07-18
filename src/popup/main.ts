@@ -33,8 +33,8 @@ import * as storageProvider from "../shared/storage.ts";
 //  ホームページ
 //  Google Apps Script
 
-const AppVersionCode = "beta36";
-const AppVersionView = "β0.7.4";
+const AppVersionCode = "beta100";
+const AppVersionView = "1.0.0";
 console.log(`%cNDV %c(Natural Disaster Viewer)%c   v.${AppVersionView}%c`,
   "background: #9f9; font-family: sans-serif; font-weight: 700; padding: 2px; font-size: 19px; font-style: italic;",
   "background: #9f9; font-family: sans-serif; font-weight: 700; padding: 2px; font-size: 11px; font-style: italic;",
@@ -99,9 +99,6 @@ showInitStatus("Getting ready, just a moment...");
 
 // ウィンドウサイズをウィンドウの拡大幅に合わせる
 window.resizeTo(1240 * window.outerWidth / window.innerWidth, window.outerHeight);
-
-const Data = {};
-void Data;
 
 /**
  * ウィンドウの表示拡大倍率を取得します。
@@ -451,12 +448,6 @@ var mscale = 0;
 var textOffsetX = 1200;
 
 var quakeText = ["","","","","","","","","","",""];
-// epicenter list of JMA
-const _EpiNameList_JMA = ["石狩地方北部","石狩地方中部","石狩地方南部","後志地方北部","後志地方東部","後志地方西部","空知地方北部","空知地方中部","空知地方南部","渡島地方北部","渡島地方東部","渡島地方西部","檜山地方","北海道奥尻島","胆振地方西部","胆振地方中東部","日高地方西部","日高地方中部","日高地方東部","上川地方北部","上川地方中部","上川地方南部","留萌地方中北部","留萌地方南部","宗谷地方北部","宗谷地方南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝地方北部","十勝地方中部","十勝地方南部","釧路地方北部","釧路地方中南部","根室地方北部","根室地方中部","根室地方南部","青森県津軽北部","青森県津軽南部","青森県三八上北","青森県下北","岩手県沿岸北部","岩手県沿岸南部","岩手県内陸北部","岩手県内陸南部","宮城県北部","宮城県中部","宮城県南部","秋田県沿岸北部","秋田県沿岸南部","秋田県内陸北部","秋田県内陸南部","山形県庄内","山形県最上","山形県村山","山形県置賜","福島県中通り","福島県浜通り","福島県会津","茨城県北部","茨城県南部","栃木県北部","栃木県南部","群馬県北部","群馬県南部","埼玉県北部","埼玉県南部","埼玉県秩父","千葉県北東部","千葉県北西部","千葉県南部","東京都２３区","東京都多摩東部","東京都多摩西部","伊豆大島","新島","神津島","三宅島","八丈島","小笠原","神奈川県東部","神奈川県西部","新潟県上越","新潟県中越","新潟県下越","新潟県佐渡","富山県東部","富山県西部","石川県能登","石川県加賀","福井県嶺北","福井県嶺南","山梨県東部・富士五湖","山梨県中・西部","長野県北部","長野県中部","長野県南部","岐阜県飛騨","岐阜県美濃東部","岐阜県美濃中西部","伊豆地方","静岡県東部","静岡県中部","静岡県西部","愛知県東部","愛知県西部","三重県北部","三重県中部","三重県南部","滋賀県北部","滋賀県南部","京都府北部","京都府南部","大阪府北部","大阪府南部","兵庫県北部","兵庫県南東部","兵庫県南西部","兵庫県淡路島","奈良県","和歌山県北部","和歌山県南部","鳥取県東部","鳥取県中部","鳥取県西部","島根県東部","島根県西部","島根県隠岐","岡山県北部","岡山県南部","広島県北部","広島県南東部","広島県南西部","山口県北部","山口県東部","山口県中部","山口県西部","徳島県北部","徳島県南部","香川県東部","香川県西部","愛媛県東予","愛媛県中予","愛媛県南予","高知県東部","高知県中部","高知県西部","福岡県福岡","福岡県北九州","福岡県筑豊","福岡県筑後","佐賀県北部","佐賀県南部","長崎県北部","長崎県南西部","長崎県島原半島","長崎県対馬","長崎県壱岐","長崎県五島","熊本県阿蘇","熊本県熊本","熊本県球磨","熊本県天草・芦北","大分県北部","大分県中部","大分県南部","大分県西部","宮崎県北部平野部","宮崎県北部山沿い","宮崎県南部平野部","宮崎県南部山沿い","鹿児島県薩摩","鹿児島県大隅","鹿児島県十島村","鹿児島県甑島","鹿児島県種子島","鹿児島県屋久島","鹿児島県奄美北部","鹿児島県奄美南部","沖縄県本島北部","沖縄県本島中南部","沖縄県久米島","沖縄県大東島","沖縄県宮古島","沖縄県石垣島","沖縄県与那国島","沖縄県西表島"];
-// epicenter list of NHK
-const _EpiNameList_NHK = ["石狩北部","石狩中部","石狩南部","後志北部","後志東部","後志西部","空知北部","空知中部","空知南部","渡島北部","渡島東部","渡島西部","檜山地方","北海道奥尻島","胆振西部","胆振中東部","日高西部","日高中部","日高東部","上川地方北部","上川地方中部","上川地方南部","留萌中北部","留萌南部","宗谷北部","宗谷南部","北海道利尻礼文","網走地方","北見地方","紋別地方","十勝北部","十勝中部","十勝南部","釧路北部","釧路中南部","根室北部","根室中部","根室南部","津軽北部","津軽南部","青森三八上北","青森下北","岩手沿岸北部","岩手沿岸南部","岩手内陸北部","岩手内陸南部","宮城北部","宮城中部","宮城南部","秋田沿岸北部","秋田沿岸南部","秋田内陸北部","秋田内陸南部","山形庄内地方","山形最上地方","山形村山地方","山形置賜地方","福島中通り","福島浜通り","会津","茨城北部","茨城南部","栃木北部","栃木南部","群馬北部","群馬南部","埼玉北部","埼玉南部","秩父地方","千葉北東部","千葉北西部","千葉南部","東京２３区","東京多摩東部","東京多摩西部","伊豆大島","新島地方","神津島","三宅島","八丈島","小笠原","神奈川東部","神奈川西部","新潟上越地方","新潟中越地方","新潟下越地方","佐渡地方","富山東部","富山西部","能登地方","加賀地方","福井嶺北地方","福井嶺南地方","山梨東部・富士五湖","山梨中・西部","長野北部","長野中部","長野南部","飛騨地方","美濃東部","美濃中西部","伊豆地方","静岡東部","静岡中部","静岡西部","愛知東部","愛知西部","三重北部","三重中部","三重南部","滋賀北部","滋賀南部","京都北部","京都南部","大阪北部","大阪南部","兵庫北部","兵庫南東部","兵庫南西部","淡路島","奈良県","和歌山北部","和歌山南部","鳥取東部","鳥取中部","鳥取西部","島根東部","島根西部","隠岐","岡山北部","岡山南部","広島北部","広島南東部","広島南西部","山口北部","山口東部","山口中部","山口西部","徳島北部","徳島南部","香川東部","香川西部","愛媛東予地方","愛媛中予地方","愛媛南予地方","高知東部","高知中部","高知西部","福岡地方","北九州地方","筑豊地方","筑後地方","佐賀北部","佐賀南部","長崎北部","長崎南西部","島原半島","対馬地方","壱岐地方","五島地方","阿蘇地方","熊本地方","球磨地方","天草・芦北","大分北部","大分中部","大分南部","大分西部","宮崎北部平野部","宮崎北部山沿い","宮崎南部平野部","宮崎南部山沿い","薩摩地方","大隅地方","十島村","甑島","種子島地方","屋久島地方","奄美北部","奄美南部","沖縄本島北部","沖縄本島中南部","久米島","大東島","宮古島","石垣島","与那国島","西表島"];
-void _EpiNameList_JMA.length;
-void _EpiNameList_NHK.length;
 // 緊急地震速報の文
 const eewWarnTextList = [] as {ja: string[]; en: string[]}[];
 for (let i = 33; i < 56; i++){
@@ -471,8 +462,6 @@ var q_currentShindo = q_maxShindo;
 
 // constants for Shindo names
 const shindoListJP = ["","1","2","3","4","5弱以上","5弱","5強","6弱","6強","7"];
-const shindoListNHK = ["","1","2","3","4","?","5-","5+","6-","6+","7"]
-void shindoListNHK;
 
 // 通常画面のテキスト（カード UI・コマンド機能付き）を管理するモジュール
 const normalText = (() => {
@@ -789,8 +778,7 @@ var textSpeed = 5,
 
 let appConfig: AppConfig | null = null;
 // earthquake variables
-var q_msiText = shindoListJP[q_maxShindo],
-    q_magnitude = "",
+var q_magnitude = "",
     q_epiName = "",
     q_depth = "",
     q_timeYY = "",
@@ -802,17 +790,12 @@ var q_msiText = shindoListJP[q_maxShindo],
     q_startTime = 0,
     q_epiIdx = 0,
     q_isSokuho = false;
-const earthquakes_log: Record<string, any> = {};
-void earthquakes_log;
-void q_msiText;
 // variables of Earthquake Early Warning
 var eewEpicenter = '',
     eewOriginTime = new Date("2000/01/01 00:00:00"),
     eewCalcintensity = '',
     eewCalcIntensityIndex = 0,
     eewDepth = '',
-    _eewAlertFlgText = '',
-    _eewCancelText = '',
     eewMagnitude = 0,
     eewReportNumber: string | number = '',
     eewReportID = '',
@@ -820,17 +803,13 @@ var eewEpicenter = '',
     _eewIsTraning = false,
     eewIsCancel = false,
     eewIsAlert = false,
-    _eewAt = new Date("2000/01/01 00:00:00"),
     eewEpicenterID = "",
-    _eewIsSea = false,
     eewIsAssumption = false,
     eewWarnForecast = "",
     // eewAboutHypocenter = "",
     eewClassCode = null as number | null;
 // tsunami information
-var _t_lastId,
-    _t_obsUpdateTime = 0,
-    t_viewType = 2;
+var t_viewType = 2;
 const tsunamiOverlayState = createTsunamiOverlayState();
 var systemTimeLag = 0; // ミリ秒単位
 
@@ -838,13 +817,7 @@ var riverlevel = new Array(7);
 var rivertext = ["","","","","","",""];
 rivertext[0] = "wfi";
 const riverPointsPromise = getRiverPoints();
-void _eewAlertFlgText;
-void _eewCancelText;
 void _eewIsTraning;
-void _eewAt;
-void _eewIsSea;
-void _t_lastId;
-void _t_obsUpdateTime;
 
 // 情報の読み込みを管理するオブジェクトです。
 type XHRItem = {
@@ -1394,14 +1367,8 @@ function getAdjustedDate(){
 
 // main variables
 var soraopen_moving = 1081;
-var soraopen_move: any = null;
 var intervalArray: number[] = [];
 var soraopen_color = 0;
-var sorabtn_last_reading = 0;
-var sorabtn_now_reading = false;
-var sorabtn_reading_done_time = Date.now();
-var getSorabtnstatus_task = 0;
-var soraopen_intervaltime = 0;
 var intervalTime = 0;
 var intervalTime1 = 0;
 var soraopen_interval1: number | null = null;
@@ -1409,18 +1376,9 @@ var t = 0;
 var cnv_anim1 = new VariableAnimation(440, "sliding", []);
 var anim_soraview = new VariableAnimation(250, "sliding_3", [1081, 1]);
 var anim_soraview_color = new VariableAnimation(250, "Normal", [0, 255]);
-var anim_soraopen = new VariableAnimation(2100, "sliding", [0, 210]);
 var anim_fullscreen = new VariableAnimation(3000, "Normal", [5, 0]);
 var testNow = false;
 var lastSaveTime = Date.now();
-void sorabtn_last_reading;
-void sorabtn_now_reading;
-void sorabtn_reading_done_time;
-void getSorabtnstatus_task;
-void soraopen_move;
-void soraopen_intervaltime;
-void soraopen_interval1;
-void anim_soraopen;
 
 // intensity list
 const _intensity_list = {
@@ -1559,9 +1517,6 @@ async function savedata(){
 function bit(number: any, bitL: any){
   return number & (2 ** bitL) && 1;
 }
-function toRad(deg: any){
-  return deg*(Math.PI/180);
-}
 function arrayCombining(array: any){
   if(rivertext[0] === "wfi"){
     return "情報の取得を待っています...";
@@ -1581,8 +1536,6 @@ function arrayCombining(array: any){
     }
   }
 }
-void toRad;
-void ExRandom;
 
 const speechBase = new AudioSpeechController() as any;
 
@@ -1695,9 +1648,7 @@ function drawRect(x: number, y: number, width: number, height: number, color: st
   context.fillStyle = color;
   context.fillRect(x, y, width, height);
 }
-function ExRandom(min: any, max: any){
-  return Math.floor( Math.random() * (max + 1 - min) ) + min ;
-}
+
 // 入力された内容を気象速報として手動で追加する
 function addWeatherWarnManually(){
   const title = (document.getElementById('BNtitle') as HTMLInputElement | null)?.value ?? "";
@@ -1709,11 +1660,6 @@ function addWeatherWarnManually(){
     text2
   );
 }
-
-var keyWord = "";
-var quake = {reportId:"",year:"",month:"",date:"",hour:"",minute:"",second:"",longitude:"",latitude:"",depth:"",magnitude:"",isAlert:false,epicenter:""};
-void keyWord;
-void quake;
 
 document.onkeydown = keydown;
 function keydown(event: KeyboardEvent){
@@ -2307,25 +2253,15 @@ function audiodebug_interval(index = 0){
   }
 }
 void audiodebug_interval;
-var timer;
-void timer;
 
 // check the Earthquake Early Warning
-var isEEW = false,
-    lastnum = 0,
+var lastnum = 0,
     lastID = "",
-    lastAt = new Date("2000/01/01 00:00:00"),
-    lastOriginalText = "",
     eewDatas = {
       version: AppVersionView,
       logs: [],
       savedTime: undefined as number | undefined
-    },
-    eewAssumptionsLog = {};
-void isEEW;
-void lastAt;
-void lastOriginalText;
-void eewAssumptionsLog;
+    };
 
 let eewOffset = NaN;
 async function eewCalcOffset_c1(){
@@ -2360,7 +2296,6 @@ function eewChecking_c1(){
       eewDepth = data.depth.slice(0, -2);
       if (eewReportID !== data.report_id) eewIsAlert = false;
       eewReportID = data.report_id;
-      _eewAlertFlgText = data.alertflg;
       let eewIsAlert_changed = (!eewIsAlert) && (data.alertflg === "警報");
       eewIsAlert = data.alertflg === "警報" ? true : false;
       eewOriginTime = new Date(data.origin_time.slice(0,4)+"/"+data.origin_time.slice(4,6)+"/"+data.origin_time.slice(6,8)+" "+data.origin_time.slice(8,10)+":"+data.origin_time.slice(10,12)+":"+data.origin_time.slice(12,14));
@@ -2550,11 +2485,6 @@ function strWidth(str: string) {
   return context.measureText(str).width;
 }
 
-export function soraopen_stop() {
-  clearInterval(intervalArray.shift());
-  soraopen_move = null;
-}
-
 type SorabtnState = {
   qid: string;
   question: string;
@@ -2608,7 +2538,6 @@ sorabtn.tracker = new TrafficTracker("ソラボタン");
 
 async function sorabtn_view(){
   soraopen_moving = 1080;
-  soraopen_intervaltime = 0;
   intervalTime = 0;
   intervalTime1 = 0;
 
@@ -2687,7 +2616,6 @@ const fetchXmlWithTimeout = async (url: string, timeoutMs = 0, cache: RequestCac
 };
 
 async function sorabtn_open(){
-  soraopen_intervaltime = 0;
   try {
     const data = await fetchJsonWithTimeout(RequestURL.wni_sorabtn, 4500, 'no-cache');
     sorabtn.tracker.update();
@@ -3838,18 +3766,11 @@ const weatherVXKOii = (dataXml: XMLDocument) => {
   }
 };
 
-function ifrange(n: number, e1: number, e2: number, cd: [number, number]=[0,0]){
-  let r1, r2;
-  if(cd[0]===0)r1=(e1<=n);else r1=(e1<n);
-  if(cd[1]===0)r2=(n<=e2);else r2=(n<e2);
-  return r1&&r2;
-}
 function toFull(str: string){
   return str.replace(/[A-Za-z0-9]/g, function(s: string) {
       return String.fromCharCode(s.charCodeAt(0) + 0xFEE0)
   }).replace(/</g, "［").replace(/>/g, "］");
 }
-void ifrange;
 void toFull;
 
 // 地震情報のティッカー表示を開始する
@@ -4002,7 +3923,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 1){
     q_maxShindo = 8+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "6.8";
     q_epiName = "山形県沖";
     q_epiIdx = 87;
@@ -4026,7 +3946,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 2){
     q_maxShindo = 9+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "6.7";
     q_epiName = "胆振地方中東部";
     q_epiIdx = 35;
@@ -4050,7 +3969,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 3){
     q_maxShindo = 7+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "5.9";
     q_epiName = "大阪府北部";
     q_epiIdx = 171;
@@ -4074,7 +3992,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 4){
     q_maxShindo = 7+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "6.6";
     q_epiName = "鳥取県中部";
     q_epiIdx = 180;
@@ -4098,7 +4015,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 5){
     q_maxShindo = 9+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "7.3";
     q_epiName = "熊本県熊本地方";
     q_epiIdx = 230;
@@ -4122,7 +4038,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 6){
     q_maxShindo = 9+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "6.4";
     q_epiName = "熊本県熊本地方";
     q_epiIdx = 230;
@@ -4146,7 +4061,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 7){
     q_maxShindo = 6+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "8.5";
     q_epiName = "小笠原諸島西方沖";
     q_epiIdx = 286;
@@ -4170,7 +4084,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 8){
     q_maxShindo = 3;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "8.2";
     q_epiName = "サハリン近海";
     q_epiIdx = 301;
@@ -4194,7 +4107,6 @@ function quakeTemplateView(viewId: number){
   if(viewId == 9){
     q_maxShindo = 9+1;
     q_currentShindo = q_maxShindo;
-    q_msiText = shindoListJP[q_maxShindo];
     q_magnitude = "--";
     q_epiName = "-------------";
     q_epiIdx = 343;
